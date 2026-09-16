@@ -10,6 +10,11 @@ import {
   INBOX_PAGE_LAYOUT_TAB_UNIVERSAL_IDENTIFIER,
   INBOX_WIDGET_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
+import {
+  BILLING_SETTINGS_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
+  BILLING_SETTINGS_TAB_UNIVERSAL_IDENTIFIER,
+  BILLING_SETTINGS_WIDGET_UNIVERSAL_IDENTIFIER,
+} from 'src/constants/quote-identifiers';
 
 export default definePageLayout({
   universalIdentifier: MAIN_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
@@ -58,6 +63,28 @@ export default definePageLayout({
             configurationType: 'FRONT_COMPONENT',
             frontComponentUniversalIdentifier:
               INBOX_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
+          },
+        },
+      ],
+    },
+    {
+      universalIdentifier: BILLING_SETTINGS_TAB_UNIVERSAL_IDENTIFIER,
+      title: 'Billing',
+      position: 2,
+      icon: 'IconReceipt',
+      layoutMode: PageLayoutTabLayoutMode.CANVAS,
+      widgets: [
+        {
+          universalIdentifier: BILLING_SETTINGS_WIDGET_UNIVERSAL_IDENTIFIER,
+          title: ' ',
+          type: 'FRONT_COMPONENT',
+          position: {
+            layoutMode: PageLayoutTabLayoutMode.CANVAS,
+          },
+          configuration: {
+            configurationType: 'FRONT_COMPONENT',
+            frontComponentUniversalIdentifier:
+              BILLING_SETTINGS_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
           },
         },
       ],

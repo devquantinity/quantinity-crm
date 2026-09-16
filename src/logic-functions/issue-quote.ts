@@ -160,12 +160,17 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
     isTaxRegistered: settings.isTaxRegistered,
   });
 
-  const sequence = await takeNextQuoteSequence(settings);
-  const documentNumber = formatDocumentNumber(
-    settings.quotePrefix,
-    settings.quotePadding,
-    sequence,
-  );
+  // A revision already carries the number of the quote it replaces, so it must
+  // NOT take another one - Q-0001 Rev 2 is the same document, not a second one.
+  const isRevision = Boolean(quote.documentNumber);
+
+  const documentNumber = isRevision
+    ? String(quote.documentNumber)
+    : formatDocumentNumber(
+        settings.quotePrefix,
+        settings.quotePadding,
+        await takeNextQuoteSequence(settings),
+      );
 
   const issuedAt = new Date();
   const validUntil = addDays(issuedAt, settings.validityDays);
@@ -234,8 +239,45 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
     );
   }
 
+  // Only now, with the revision safely issued, does the version it replaces stop
+  // being the live offer. Doing this earlier would leave the client holding a
+  // superseded quote and nothing to replace it with.
+  let supersededCount = 0;
+
+  if (isRevision) {
+    const { quotes: predecessors } = await client.query({
+      quotes: {
+        __args: {
+          filter: {
+            documentNumber: { eq: documentNumber },
+            status: { in: ['ISSUED', 'ACCEPTED'] },
+          },
+        },
+        edges: { node: { id: true, revision: true, status: true } },
+      },
+    });
+
+    for (const edge of predecessors?.edges ?? []) {
+      const node = (edge as any).node;
+
+      if (node.id === quoteId || Number(node.revision ?? 1) >= revision) {
+        continue;
+      }
+
+      await client.mutation({
+        updateQuote: {
+          __args: { id: node.id, data: { status: 'SUPERSEDED' } },
+          id: true,
+        },
+      });
+
+      supersededCount += 1;
+    }
+  }
+
   return {
     ok: true,
+    supersededCount,
     documentNumber: updateQuote.documentNumber,
     status: updateQuote.status,
     // The link to hand the client.
