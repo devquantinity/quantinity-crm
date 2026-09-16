@@ -9,6 +9,8 @@ import {
 } from 'twenty-sdk/front-component';
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
+import { commandErrorMessage } from 'src/lib/command-error';
+
 import { REVISE_QUOTE_COMMAND_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 
 /** Revise action. Lands the user on the new draft, which is where they wanted to be. */
@@ -68,8 +70,7 @@ const ReviseQuoteCommand = () => {
       }
     } catch (error) {
       await enqueueSnackbar({
-        message:
-          error instanceof Error ? error.message : 'Could not revise this quote',
+        message: commandErrorMessage(error, 'Could not revise this quote'),
         variant: 'error',
       });
     }

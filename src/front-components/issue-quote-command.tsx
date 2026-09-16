@@ -8,6 +8,8 @@ import {
 } from 'twenty-sdk/front-component';
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
+import { commandErrorMessage } from 'src/lib/command-error';
+
 import { ISSUE_QUOTE_COMMAND_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 
 /**
@@ -80,8 +82,7 @@ const IssueQuoteCommand = () => {
       });
     } catch (error) {
       await enqueueSnackbar({
-        message:
-          error instanceof Error ? error.message : 'Could not issue this quote',
+        message: commandErrorMessage(error, 'Could not issue this quote'),
         variant: 'error',
       });
     }

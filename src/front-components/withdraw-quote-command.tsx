@@ -7,6 +7,8 @@ import {
 } from 'twenty-sdk/front-component';
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
+import { commandErrorMessage } from 'src/lib/command-error';
+
 import { WITHDRAW_QUOTE_COMMAND_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 
 /** Withdraw action. Danger accent, because the client's live offer disappears. */
@@ -53,10 +55,7 @@ const WithdrawQuoteCommand = () => {
       });
     } catch (error) {
       await enqueueSnackbar({
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Could not withdraw this quote',
+        message: commandErrorMessage(error, 'Could not withdraw this quote'),
         variant: 'error',
       });
     }
