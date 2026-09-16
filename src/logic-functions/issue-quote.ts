@@ -7,6 +7,8 @@ import {
   calculateTotals,
   formatDocumentNumber,
   addDays,
+  findCurrencyMismatches,
+  lineLabel,
   type DiscountType,
 } from 'src/lib/quote-math';
 import {
@@ -76,6 +78,7 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
         edges: {
           node: {
             id: true,
+            name: true,
             description: true,
             quantity: true,
             isTaxable: true,
@@ -104,18 +107,50 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
 
   const settings = await getQuoteSettings();
 
-  const lines = (quote.quoteItems?.edges ?? []).map((edge: any) => ({
-    quantity: Number(edge.node.quantity ?? 0),
-    unitPriceMicros: Number(edge.node.unitPrice?.amountMicros ?? 0),
-    isTaxable: edge.node.isTaxable !== false,
-  }));
+  const items = (quote.quoteItems?.edges ?? []).map((edge: any) => edge.node);
 
-  if (lines.length === 0) {
+  if (items.length === 0) {
     return new Response(
       { error: 'A quote needs at least one line item before it can be issued' },
       { status: 422 },
     );
   }
+
+  // Every check below runs BEFORE the sequence number is taken. A refused issue
+  // must not leave a hole in the numbering.
+  const unlabelled = items.filter((item: any) => lineLabel(item).length === 0);
+
+  if (unlabelled.length > 0) {
+    return new Response(
+      {
+        error: `${unlabelled.length} line item${unlabelled.length === 1 ? ' has' : 's have'} no description. A client cannot be asked to accept a blank line.`,
+      },
+      { status: 422 },
+    );
+  }
+
+  const mismatches = findCurrencyMismatches(
+    items.map((item: any) => ({ currencyCode: item.unitPrice?.currencyCode })),
+    settings.currencyCode,
+  );
+
+  if (mismatches.length > 0) {
+    const found = [...new Set(mismatches.map((m) => m.currencyCode))].join(', ');
+
+    return new Response(
+      {
+        error: `This quote is in ${settings.currencyCode} but ${mismatches.length} line item${mismatches.length === 1 ? ' is' : 's are'} priced in ${found}. Reprice the line${mismatches.length === 1 ? '' : 's'}, or change the quote currency in settings - amounts are never converted automatically.`,
+        lineNumbers: mismatches.map((m) => m.index + 1),
+      },
+      { status: 422 },
+    );
+  }
+
+  const lines = items.map((item: any) => ({
+    quantity: Number(item.quantity ?? 0),
+    unitPriceMicros: Number(item.unitPrice?.amountMicros ?? 0),
+    isTaxable: item.isTaxable !== false,
+  }));
 
   const totals = calculateTotals({
     lines,

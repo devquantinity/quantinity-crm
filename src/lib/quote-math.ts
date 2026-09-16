@@ -113,3 +113,45 @@ export const addDays = (date: Date, days: number) => {
   next.setDate(next.getDate() + days);
   return next;
 };
+
+/**
+ * A quote carries ONE currency.
+ *
+ * Twenty stores a currency code on every CURRENCY value, and its picker
+ * defaults to the workspace currency rather than the quote's - so it is easy to
+ * price a line in USD on a quote that calls itself MYR. Formatting the total
+ * with the quote's currency then prints a number that is simply wrong on a
+ * document somebody signs.
+ *
+ * There is no safe automatic answer: converting needs a rate nobody supplied,
+ * and picking one side silently changes what was agreed. So issuing refuses,
+ * and says which lines disagree.
+ */
+export type LineCurrency = { currencyCode?: string | null };
+
+export const findCurrencyMismatches = <T extends LineCurrency>(
+  lines: T[],
+  quoteCurrencyCode: string,
+): { index: number; currencyCode: string }[] =>
+  lines
+    .map((line, index) => ({ index, currencyCode: line.currencyCode ?? '' }))
+    // An unset code means the amount was entered without one - it inherits the
+    // quote's currency, which is the behaviour people expect.
+    .filter(
+      (line) =>
+        line.currencyCode !== '' && line.currencyCode !== quoteCurrencyCode,
+    );
+
+/** What prints in a line's Description column. Never blank on a real document. */
+export const lineLabel = (line: {
+  description?: string | null;
+  name?: string | null;
+}) => {
+  const description = (line.description ?? '').trim();
+
+  if (description.length > 0) {
+    return description;
+  }
+
+  return (line.name ?? '').trim();
+};

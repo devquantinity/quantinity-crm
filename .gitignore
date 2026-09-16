@@ -41,3 +41,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 *.d.ts
+
+# Gotka source, kept here as reference only - not part of this app
+gotech/

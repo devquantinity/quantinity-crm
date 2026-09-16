@@ -7,6 +7,7 @@ import {
   lineAmountMicros,
   calculateTotals,
   formatMoney,
+  lineLabel,
   type DiscountType,
 } from 'src/lib/quote-math';
 import type { QuoteIssuer } from 'src/lib/quote-settings';
@@ -109,6 +110,7 @@ const handler = async (payload: RoutePayload) => {
         edges: {
           node: {
             id: true,
+            name: true,
             description: true,
             quantity: true,
             unit: true,
@@ -157,12 +159,17 @@ const handler = async (payload: RoutePayload) => {
   const rows = items
     .map((item: any, index: number) => {
       const amount = lineAmountMicros(lines[index]);
+      // Print each line in the currency it was actually stored in. Issuing now
+      // refuses mixed currencies, but a quote issued before that rule existed
+      // should show what it really says rather than relabel it.
+      const lineCurrency = item.unitPrice?.currencyCode || currency;
+
       return `<tr>
-        <td>${escapeHtml(item.description)}</td>
+        <td>${escapeHtml(lineLabel(item))}</td>
         <td class="num">${escapeHtml(item.quantity)}</td>
         <td>${escapeHtml(item.unit)}</td>
-        <td class="num">${formatMoney(lines[index].unitPriceMicros, currency)}</td>
-        <td class="num">${formatMoney(amount, currency)}</td>
+        <td class="num">${formatMoney(lines[index].unitPriceMicros, lineCurrency)}</td>
+        <td class="num">${formatMoney(amount, lineCurrency)}</td>
       </tr>`;
     })
     .join('');
