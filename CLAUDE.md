@@ -48,23 +48,23 @@
 
 ## Best practice
 
-It's highly recommended to create new app entities using `yarn twenty dev:add`. These are the options:
+It's highly recommended to create new app entities using `npx twenty dev:add`. These are the options:
 
 | Entity type          | Command                                  | Generated file                        |
 | -------------------- | ---------------------------------------- | ------------------------------------- |
-| Object               | `yarn twenty dev:add object`             | `src/objects/<name>.ts`               |
-| Field                | `yarn twenty dev:add field`              | `src/fields/<name>.ts`                |
-| Logic function       | `yarn twenty dev:add logicFunction`      | `src/logic-functions/<name>.ts`       |
-| Front component      | `yarn twenty dev:add frontComponent`     | `src/front-components/<name>.tsx`     |
-| Role                 | `yarn twenty dev:add role`               | `src/roles/<name>.ts`                 |
-| Skill                | `yarn twenty dev:add skill`              | `src/skills/<name>.ts`                |
-| Agent                | `yarn twenty dev:add agent`              | `src/agents/<name>.ts`                |
-| View                 | `yarn twenty dev:add view`               | `src/views/<name>.ts`                 |
-| Navigation menu item | `yarn twenty dev:add navigationMenuItem` | `src/navigation-menu-items/<name>.ts` |
-| Page layout          | `yarn twenty dev:add pageLayout`         | `src/page-layouts/<name>.ts`          |
-| Page layout tab      | `yarn twenty dev:add pageLayoutTab`      | `src/page-layout-tabs/<name>.ts`      |
-| Command menu item    | `yarn twenty dev:add commandMenuItem`    | `src/command-menu-items/<name>.ts`    |
-| View field           | `yarn twenty dev:add viewField`          | `src/view-fields/<name>.ts`           |
-| Connection provider  | `yarn twenty dev:add connectionProvider` | `src/connection-providers/<name>.ts`  |
+| Object               | `npx twenty dev:add object`             | `src/objects/<name>.ts`               |
+| Field                | `npx twenty dev:add field`              | `src/fields/<name>.ts`                |
+| Logic function       | `npx twenty dev:add logicFunction`      | `src/logic-functions/<name>.ts`       |
+| Front component      | `npx twenty dev:add frontComponent`     | `src/front-components/<name>.tsx`     |
+| Role                 | `npx twenty dev:add role`               | `src/roles/<name>.ts`                 |
+| Skill                | `npx twenty dev:add skill`              | `src/skills/<name>.ts`                |
+| Agent                | `npx twenty dev:add agent`              | `src/agents/<name>.ts`                |
+| View                 | `npx twenty dev:add view`               | `src/views/<name>.ts`                 |
+| Navigation menu item | `npx twenty dev:add navigationMenuItem` | `src/navigation-menu-items/<name>.ts` |
+| Page layout          | `npx twenty dev:add pageLayout`         | `src/page-layouts/<name>.ts`          |
+| Page layout tab      | `npx twenty dev:add pageLayoutTab`      | `src/page-layout-tabs/<name>.ts`      |
+| Command menu item    | `npx twenty dev:add commandMenuItem`    | `src/command-menu-items/<name>.ts`    |
+| View field           | `npx twenty dev:add viewField`          | `src/view-fields/<name>.ts`           |
+| Connection provider  | `npx twenty dev:add connectionProvider` | `src/connection-providers/<name>.ts`  |
 
 This helps automatically generate required IDs etc.

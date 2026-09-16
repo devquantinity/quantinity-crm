@@ -1,14 +1,11 @@
 {
-  "name": "quantinity",
+  "name": "quantinity-crm",
   "version": "0.1.0",
   "license": "MIT",
   "engines": {
-    "node": "^24.5.0",
-    "npm": "please-use-yarn",
-    "yarn": ">=4.0.2"
+    "node": "^24.5.0"
   },
   "keywords": [],
-  "packageManager": "yarn@4.13.0",
   "scripts": {
     "twenty": "twenty",
     "lint": "oxlint -c .oxlintrc.json .",
@@ -31,5 +28,8 @@
     "typescript": "^5.9.3",
     "vite-tsconfig-paths": "^4.2.1",
     "vitest": "^4.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

@@ -6,6 +6,9 @@ import {
   MAIN_PAGE_LAYOUT_TAB_UNIVERSAL_IDENTIFIER,
   MAIN_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
   MAIN_PAGE_WIDGET_UNIVERSAL_IDENTIFIER,
+  INBOX_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
+  INBOX_PAGE_LAYOUT_TAB_UNIVERSAL_IDENTIFIER,
+  INBOX_WIDGET_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
 export default definePageLayout({
@@ -32,6 +35,29 @@ export default definePageLayout({
             configurationType: 'FRONT_COMPONENT',
             frontComponentUniversalIdentifier:
               MAIN_PAGE_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
+          },
+        },
+      ],
+    },
+    {
+      // SPIKE B - a CANVAS tab is the one place a scrolling surface is allowed.
+      universalIdentifier: INBOX_PAGE_LAYOUT_TAB_UNIVERSAL_IDENTIFIER,
+      title: 'Inbox spike',
+      position: 1,
+      icon: 'IconBrandWhatsapp',
+      layoutMode: PageLayoutTabLayoutMode.CANVAS,
+      widgets: [
+        {
+          universalIdentifier: INBOX_WIDGET_UNIVERSAL_IDENTIFIER,
+          title: ' ',
+          type: 'FRONT_COMPONENT',
+          position: {
+            layoutMode: PageLayoutTabLayoutMode.CANVAS,
+          },
+          configuration: {
+            configurationType: 'FRONT_COMPONENT',
+            frontComponentUniversalIdentifier:
+              INBOX_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
           },
         },
       ],
