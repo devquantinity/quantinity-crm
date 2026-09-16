@@ -155,3 +155,45 @@ export const lineLabel = (line: {
 
   return (line.name ?? '').trim();
 };
+
+/**
+ * Turn the lines of an accepted quotation into the milestones of a project.
+ *
+ * Kept pure and separate from the logic function because this is the part with
+ * actual rules in it: the order the client saw must survive, a line with no
+ * description still needs something printable, and the money per milestone has
+ * to be the line's own amount rather than a share of the total.
+ */
+export type QuoteLineForMilestone = {
+  name?: string | null;
+  description?: string | null;
+  quantity?: number | null;
+  lineOrder?: number | null;
+  unitPrice?: { amountMicros?: number | null; currencyCode?: string | null } | null;
+};
+
+export type SeededMilestone = {
+  name: string;
+  lineOrder: number;
+  amountMicros: number;
+  currencyCode: string;
+};
+
+export const milestonesFromQuoteLines = (
+  lines: QuoteLineForMilestone[],
+  fallbackCurrencyCode: string,
+): SeededMilestone[] =>
+  [...lines]
+    // The client read the quotation in a particular order. Delivery should
+    // present the same order back to them.
+    .sort((a, b) => Number(a.lineOrder ?? 0) - Number(b.lineOrder ?? 0))
+    .map((line, index) => ({
+      name: lineLabel(line) || `Milestone ${index + 1}`,
+      lineOrder: index,
+      amountMicros: lineAmountMicros({
+        quantity: Number(line.quantity ?? 0),
+        unitPriceMicros: Number(line.unitPrice?.amountMicros ?? 0),
+        isTaxable: true,
+      }),
+      currencyCode: line.unitPrice?.currencyCode || fallbackCurrencyCode,
+    }));

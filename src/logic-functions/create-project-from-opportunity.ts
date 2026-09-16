@@ -3,7 +3,7 @@ import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
 import { CREATE_PROJECT_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/project-identifiers';
-import { lineLabel, lineAmountMicros } from 'src/lib/quote-math';
+import { milestonesFromQuoteLines } from 'src/lib/quote-math';
 
 /**
  * Hand a won deal off to delivery.
@@ -142,35 +142,27 @@ const run = async (payload: RoutePayload<CreateProjectBody>) => {
       })
     : null;
 
-  const items = (lineSource?.quote?.quoteItems?.edges ?? [])
-    .map((edge: any) => edge.node)
-    .sort((a: any, b: any) => Number(a.lineOrder ?? 0) - Number(b.lineOrder ?? 0));
+  const milestones = milestonesFromQuoteLines(
+    (lineSource?.quote?.quoteItems?.edges ?? []).map((edge: any) => edge.node),
+    contractValue?.currencyCode ?? 'MYR',
+  );
 
   let seeded = 0;
 
-  for (const [index, item] of items.entries()) {
-    const amountMicros = lineAmountMicros({
-      quantity: Number(item.quantity ?? 0),
-      unitPriceMicros: Number(item.unitPrice?.amountMicros ?? 0),
-      isTaxable: true,
-    });
-
+  for (const milestone of milestones) {
     await client.mutation({
       createMilestone: {
         __args: {
           data: {
-            name: lineLabel(item) || `Milestone ${index + 1}`,
+            name: milestone.name,
             status: 'PENDING',
-            lineOrder: index,
+            lineOrder: milestone.lineOrder,
             projectId: createProject.id,
-            ...(amountMicros > 0
+            ...(milestone.amountMicros > 0
               ? {
                   amount: {
-                    amountMicros,
-                    currencyCode:
-                      item.unitPrice?.currencyCode ??
-                      contractValue?.currencyCode ??
-                      'MYR',
+                    amountMicros: milestone.amountMicros,
+                    currencyCode: milestone.currencyCode,
                   },
                 }
               : {}),

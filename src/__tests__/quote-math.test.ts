@@ -4,6 +4,7 @@ import {
   calculateTotals,
   findCurrencyMismatches,
   lineLabel,
+  milestonesFromQuoteLines,
   toMicros,
 } from 'src/lib/quote-math';
 
@@ -87,5 +88,64 @@ describe('calculateTotals', () => {
 
     expect(totals.discountMicros).toBe(toMicros(100));
     expect(totals.totalMicros).toBe(0);
+  });
+});
+
+describe('milestonesFromQuoteLines', () => {
+  it('keeps the order the client saw, renumbering from zero', () => {
+    const seeded = milestonesFromQuoteLines(
+      [
+        { name: 'Training', lineOrder: 5 },
+        { name: 'Setup', lineOrder: 2 },
+        { name: 'Migration', lineOrder: 3 },
+      ],
+      'MYR',
+    );
+
+    expect(seeded.map((m) => m.name)).toEqual(['Setup', 'Migration', 'Training']);
+    expect(seeded.map((m) => m.lineOrder)).toEqual([0, 1, 2]);
+  });
+
+  it('bills each milestone its own line amount, not a share of the total', () => {
+    const seeded = milestonesFromQuoteLines(
+      [
+        { name: 'Setup', lineOrder: 0, quantity: 1, unitPrice: { amountMicros: toMicros(5000), currencyCode: 'MYR' } },
+        { name: 'Training', lineOrder: 1, quantity: 2, unitPrice: { amountMicros: toMicros(1200), currencyCode: 'MYR' } },
+      ],
+      'MYR',
+    );
+
+    expect(seeded[0].amountMicros).toBe(toMicros(5000));
+    expect(seeded[1].amountMicros).toBe(toMicros(2400));
+  });
+
+  it('prefers the description, falls back to the name, then to a number', () => {
+    const seeded = milestonesFromQuoteLines(
+      [
+        { description: 'Data migration', name: 'Migration', lineOrder: 0 },
+        { name: 'Training', lineOrder: 1 },
+        { lineOrder: 2 },
+      ],
+      'MYR',
+    );
+
+    expect(seeded.map((m) => m.name)).toEqual([
+      'Data migration',
+      'Training',
+      'Milestone 3',
+    ]);
+  });
+
+  it('falls back to the quote currency when a line has none', () => {
+    const seeded = milestonesFromQuoteLines(
+      [{ name: 'Setup', lineOrder: 0, quantity: 1, unitPrice: { amountMicros: toMicros(100) } }],
+      'MYR',
+    );
+
+    expect(seeded[0].currencyCode).toBe('MYR');
+  });
+
+  it('returns nothing for a quote with no lines', () => {
+    expect(milestonesFromQuoteLines([], 'MYR')).toEqual([]);
   });
 });
