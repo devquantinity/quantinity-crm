@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { enqueueSnackbar } from 'twenty-sdk/front-component';
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
+import { commandErrorMessage } from 'src/lib/command-error';
+
 import { BILLING_SETTINGS_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 
 /**
@@ -118,6 +120,7 @@ const Section = ({
 const BillingSettings = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -147,17 +150,12 @@ const BillingSettings = () => {
     if (!settings) return;
 
     setSaving(true);
+    setSaveError(null);
+
+    const client = new RestApiClient();
 
     try {
-      const saved = await new RestApiClient().post<Settings & { error?: string }>(
-        '/s/quote-settings',
-        settings,
-      );
-
-      if (saved?.error) {
-        await enqueueSnackbar({ message: saved.error, variant: 'error' });
-        return;
-      }
+      const saved = await client.post<Settings>('/s/quote-settings', settings);
 
       setSettings(saved);
       await enqueueSnackbar({
@@ -165,11 +163,22 @@ const BillingSettings = () => {
         variant: 'success',
       });
     } catch (error) {
-      await enqueueSnackbar({
-        message:
-          error instanceof Error ? error.message : 'Could not save settings',
-        variant: 'error',
-      });
+      // Same trap as the quote commands: RestApiClient throws on a 422, so the
+      // server's explanation lives on the thrown error, not in a return value.
+      const message = commandErrorMessage(error, 'Could not save settings');
+
+      setSaveError(message);
+      await enqueueSnackbar({ message, variant: 'error' });
+
+      // A refused save leaves the form showing values the server rejected,
+      // which reads exactly like a successful save. Put the stored values back
+      // so what is on screen is what is actually stored.
+      try {
+        setSettings(await client.get<Settings>('/s/quote-settings'));
+      } catch {
+        // If even the re-read fails, the banner above is still the honest
+        // signal - better a stale form with a visible error than a silent lie.
+      }
     } finally {
       setSaving(false);
     }
@@ -443,6 +452,26 @@ const BillingSettings = () => {
             />
           </Field>
         </Section>
+
+        {saveError && (
+          <div
+            role="alert"
+            style={{
+              background: '#fdecec',
+              border: '1px solid #f3c9c9',
+              borderRadius: '8px',
+              padding: '12px 14px',
+              fontSize: '13px',
+              lineHeight: 1.45,
+              color: '#8c1d1d',
+            }}
+          >
+            <b style={{ display: 'block', marginBottom: '2px' }}>
+              Not saved
+            </b>
+            {saveError}
+          </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: '8px' }}>
           <button
