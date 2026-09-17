@@ -21,6 +21,7 @@ import {
   QUOTE_TERMS_FIELD_UNIVERSAL_IDENTIFIER,
   QUOTE_ISSUER_SNAPSHOT_FIELD_UNIVERSAL_IDENTIFIER,
   QUOTE_BILL_TO_SNAPSHOT_FIELD_UNIVERSAL_IDENTIFIER,
+  QUOTE_IS_TEMPLATE_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/quote-identifiers';
 
 /**
@@ -218,6 +219,16 @@ export default defineObject({
       label: 'Bill to snapshot',
       description: 'Client company and contact details frozen at issue',
       icon: 'IconAddressBook',
+    },
+    {
+      universalIdentifier: QUOTE_IS_TEMPLATE_FIELD_UNIVERSAL_IDENTIFIER,
+      name: 'isTemplate',
+      type: FieldType.BOOLEAN,
+      label: 'Template',
+      description:
+        'A skeleton you duplicate rather than send. Never issued as it stands',
+      icon: 'IconCopy',
+      defaultValue: false,
     },
   ],
 });
