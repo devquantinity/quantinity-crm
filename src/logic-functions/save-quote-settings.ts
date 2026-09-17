@@ -66,6 +66,20 @@ const handler = async (payload: RoutePayload<Partial<QuoteSettings>>) => {
     );
   }
 
+  const publicBaseUrl = String(incoming.publicBaseUrl ?? current.publicBaseUrl)
+    .trim()
+    .replace(/\/+$/, '');
+
+  if (publicBaseUrl.length > 0 && !/^https?:\/\/.+/i.test(publicBaseUrl)) {
+    return new Response(
+      {
+        error:
+          'The client link address must start with http:// or https://, or be left empty.',
+      },
+      { status: 422 },
+    );
+  }
+
   const next: QuoteSettings = {
     ...current,
     ...incoming,
@@ -81,6 +95,7 @@ const handler = async (payload: RoutePayload<Partial<QuoteSettings>>) => {
       .slice(0, 10),
     invoicePadding: clampPadding(incoming.invoicePadding ?? current.invoicePadding),
     nextInvoiceSequence: Math.max(requestedInvoiceSequence, 1),
+    publicBaseUrl,
     paymentTermsDays: Math.min(
       Math.max(
         Math.round(Number(incoming.paymentTermsDays ?? current.paymentTermsDays) || 14),

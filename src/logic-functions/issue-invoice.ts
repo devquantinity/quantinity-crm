@@ -9,6 +9,11 @@ import {
 } from 'src/lib/quote-settings';
 import { formatDocumentNumber, formatMoney } from 'src/lib/quote-math';
 import { addDaysToDate } from 'src/lib/invoice-math';
+import {
+  billToSnapshotFromCompany,
+  isBillToEmpty,
+} from 'src/lib/document-parties';
+import { absoluteShareUrl } from 'src/lib/share-url';
 
 /**
  * Issue an invoice.
@@ -42,25 +47,7 @@ const run = async (payload: RoutePayload<IssueInvoiceBody>) => {
       documentNumber: true,
       notes: true,
       amount: { amountMicros: true, currencyCode: true },
-      project: {
-        id: true,
-        name: true,
-        opportunity: {
-          id: true,
-          company: {
-            id: true,
-            name: true,
-            address: {
-              addressStreet1: true,
-              addressStreet2: true,
-              addressCity: true,
-              addressState: true,
-              addressPostcode: true,
-              addressCountry: true,
-            },
-          },
-        },
-      },
+      project: { id: true, name: true },
     },
   });
 
@@ -108,21 +95,75 @@ const run = async (payload: RoutePayload<IssueInvoiceBody>) => {
   const issuedAt = new Date();
   const dueDate = addDaysToDate(issuedAt, settings.paymentTermsDays);
 
-  const company = invoice.project?.opportunity?.company;
-  const address = company?.address;
+  // The company is fetched on its own. invoice -> project -> opportunity ->
+  // company is three relations deep and Twenty hands back a null company
+  // rather than an error, which is how quotations went out with a blank
+  // "Bill to" for days without anyone noticing.
+  // One relation hop per query. invoice -> project -> opportunity came back
+  // with a null opportunity even though the project plainly has one in the UI,
+  // and it fails silently rather than erroring, so each hop is asked for from
+  // the root of its own query.
+  let opportunityId: string | null = null;
 
-  const billToSnapshot = {
-    companyName: company?.name ?? '',
-    address: [
-      address?.addressStreet1,
-      address?.addressStreet2,
-      [address?.addressPostcode, address?.addressCity].filter(Boolean).join(' '),
-      address?.addressState,
-      address?.addressCountry,
-    ]
-      .filter((part) => part && String(part).trim().length > 0)
-      .join(', '),
-  };
+  if (invoice.project?.id) {
+    const { project } = await client.query({
+      project: {
+        __args: { filter: { id: { eq: invoice.project.id } } },
+        id: true,
+        opportunity: { id: true },
+      },
+    });
+
+    opportunityId = project?.opportunity?.id ?? null;
+  }
+
+  let company = null;
+
+  if (opportunityId) {
+    const { opportunity } = await client.query({
+      opportunity: {
+        __args: { filter: { id: { eq: opportunityId } } },
+        id: true,
+        company: {
+          id: true,
+          name: true,
+          address: {
+            addressStreet1: true,
+            addressStreet2: true,
+            addressCity: true,
+            addressState: true,
+            addressPostcode: true,
+            addressCountry: true,
+          },
+        },
+      },
+    });
+
+    company = opportunity?.company ?? null;
+  }
+
+  const billToSnapshot = billToSnapshotFromCompany(company);
+
+  // An invoice with a blank "Bill to" is not a document you can send. Refuse
+  // before the number is taken, and say exactly where the chain breaks -
+  // invoice -> project -> opportunity -> company - so it can be fixed in one
+  // go rather than guessed at.
+  if (isBillToEmpty(billToSnapshot)) {
+    const missing = !invoice.project?.id
+      ? 'this invoice is not attached to a project'
+      : !opportunityId
+        ? `the project "${invoice.project.name}" is not attached to a deal`
+        : !company
+          ? 'that deal has no company on it'
+          : 'that company has no name';
+
+    return new Response(
+      {
+        error: `There is nobody to bill: ${missing}. An invoice cannot go out with a blank "Bill to".`,
+      },
+      { status: 422 },
+    );
+  }
 
   const documentNumber = formatDocumentNumber(
     settings.invoicePrefix,
@@ -172,7 +213,11 @@ const run = async (payload: RoutePayload<IssueInvoiceBody>) => {
     documentNumber: updateInvoice.documentNumber,
     amount: formatMoney(amountMicros, currencyCode),
     dueDate: String(updateInvoice.dueDate ?? '').slice(0, 10),
-    shareUrl: `/s/invoice?token=${updateInvoice.shareToken}`,
+    shareUrl: absoluteShareUrl(
+      `/s/invoice?token=${updateInvoice.shareToken}`,
+      payload.headers,
+      settings.publicBaseUrl,
+    ),
   };
 };
 

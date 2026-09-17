@@ -25,6 +25,7 @@ type Settings = {
   nextInvoiceSequence: number;
   paymentTermsDays: number;
   paymentInstructions: string;
+  publicBaseUrl: string;
   validityDays: number;
   taxLabel: string;
   taxRate: number;
@@ -442,6 +443,19 @@ const BillingSettings = () => {
               style={input}
               value={settings.paymentTermsDays}
               onChange={(e) => set('paymentTermsDays', Number(e.target.value))}
+            />
+          </Field>
+
+          <Field
+            label="Client link address"
+            hint="Where clients open a quotation or invoice link. Leave empty while developing; set it to your real address before sending anything out."
+          >
+            <input
+              id="public-base-url"
+              style={input}
+              value={settings.publicBaseUrl}
+              onChange={(e) => set('publicBaseUrl', e.target.value)}
+              placeholder="https://crm.quantinity.my"
             />
           </Field>
 

@@ -15,6 +15,11 @@ import {
   getQuoteSettings,
   takeNextQuoteSequence,
 } from 'src/lib/quote-settings';
+import {
+  billToSnapshotFromCompany,
+  isBillToEmpty,
+} from 'src/lib/document-parties';
+import { absoluteShareUrl } from 'src/lib/share-url';
 
 /**
  * Issue a draft quote.
@@ -58,22 +63,7 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
       discountType: true,
       discountValue: true,
       terms: true,
-      opportunity: {
-        id: true,
-        name: true,
-        company: {
-          id: true,
-          name: true,
-          address: {
-            addressStreet1: true,
-            addressStreet2: true,
-            addressCity: true,
-            addressState: true,
-            addressPostcode: true,
-            addressCountry: true,
-          },
-        },
-      },
+      opportunity: { id: true, name: true },
       quoteItems: {
         edges: {
           node: {
@@ -174,23 +164,52 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
 
   const issuedAt = new Date();
   const validUntil = addDays(issuedAt, settings.validityDays);
-  const company = quote.opportunity?.company;
-  const address = company?.address;
+  // Fetched separately: asking for quote -> opportunity -> company in one
+  // query returns a null company rather than an error, and a quotation with a
+  // blank "Bill to" looks fine in the app and wrong in the client's inbox.
+  let company = null;
 
-  const billToSnapshot = {
-    companyName: company?.name ?? '',
-    address: [
-      address?.addressStreet1,
-      address?.addressStreet2,
-      [address?.addressPostcode, address?.addressCity]
-        .filter(Boolean)
-        .join(' '),
-      address?.addressState,
-      address?.addressCountry,
-    ]
-      .filter((part) => part && String(part).trim().length > 0)
-      .join(', '),
-  };
+  if (quote.opportunity?.id) {
+    const { opportunity } = await client.query({
+      opportunity: {
+        __args: { filter: { id: { eq: quote.opportunity.id } } },
+        id: true,
+        company: {
+          id: true,
+          name: true,
+          address: {
+            addressStreet1: true,
+            addressStreet2: true,
+            addressCity: true,
+            addressState: true,
+            addressPostcode: true,
+            addressCountry: true,
+          },
+        },
+      },
+    });
+
+    company = opportunity?.company ?? null;
+  }
+
+  const billToSnapshot = billToSnapshotFromCompany(company);
+
+  // Same rule as an invoice: a quotation with a blank "Bill to" looks fine in
+  // the app and wrong in the client's inbox. Refuse before the number is taken.
+  if (isBillToEmpty(billToSnapshot)) {
+    const missing = !quote.opportunity?.id
+      ? 'this quotation is not attached to a deal'
+      : !company
+        ? 'that deal has no company on it'
+        : 'that company has no name';
+
+    return new Response(
+      {
+        error: `There is nobody to address this to: ${missing}. A quotation cannot go out with a blank "Bill to".`,
+      },
+      { status: 422 },
+    );
+  }
 
   const revision = Number(quote.revision ?? 1);
   const documentLabel =
@@ -281,7 +300,11 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
     documentNumber: updateQuote.documentNumber,
     status: updateQuote.status,
     // The link to hand the client.
-    shareUrl: `/s/quote?token=${updateQuote.shareToken}`,
+    shareUrl: absoluteShareUrl(
+      `/s/quote?token=${updateQuote.shareToken}`,
+      payload.headers,
+      settings.publicBaseUrl,
+    ),
     total: updateQuote.total,
   };
 };

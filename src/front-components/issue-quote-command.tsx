@@ -9,6 +9,7 @@ import {
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
 import { commandErrorMessage } from 'src/lib/command-error';
+import { resolveShareLink } from 'src/lib/share-url';
 
 import { ISSUE_QUOTE_COMMAND_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 
@@ -66,8 +67,10 @@ const IssueQuoteCommand = () => {
 
       // Front components run in a sandboxed worker, so `location` may not be
       // there. Fall back to the path rather than pasting "undefined/s/quote".
-      const origin = globalThis.location?.origin ?? '';
-      const shareLink = response.shareUrl ? `${origin}${response.shareUrl}` : '';
+      const shareLink = resolveShareLink(
+        response.shareUrl,
+        globalThis.location?.origin,
+      );
 
       if (shareLink) {
         await copyToClipboard(shareLink);

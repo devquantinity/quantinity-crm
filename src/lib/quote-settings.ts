@@ -26,6 +26,10 @@ export type QuoteSettings = {
   nextInvoiceSequence: number;
   paymentTermsDays: number;
   paymentInstructions: string;
+  // Where a client opens a quotation or invoice link. Empty means "work it out
+  // from the request", which is right in development and wrong the moment this
+  // is deployed behind a domain.
+  publicBaseUrl: string;
   validityDays: number;
   taxLabel: string;
   taxRate: number;
@@ -46,6 +50,7 @@ export const DEFAULT_QUOTE_SETTINGS: QuoteSettings = {
   nextInvoiceSequence: 1,
   paymentTermsDays: 14,
   paymentInstructions: '',
+  publicBaseUrl: '',
   validityDays: 30,
   taxLabel: 'SST',
   taxRate: 0,
