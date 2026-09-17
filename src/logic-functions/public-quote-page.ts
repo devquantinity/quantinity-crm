@@ -77,7 +77,14 @@ const statusBanner = (status: string, validUntil?: string | null): StatusBanner 
   return null;
 };
 
-const handler = async (payload: RoutePayload) => {
+/**
+ * Note on the lookup: Twenty's singular finder THROWS "Record not found"
+ * rather than returning null, so the `!quote` check below never fires and an
+ * unknown token lands in the catch. Without that catch a client opening a
+ * stale link got a raw 500 JSON with an internal error code - on a page that
+ * exists to be sent to clients.
+ */
+const run = async (payload: RoutePayload) => {
   const token = payload.queryStringParameters?.token;
 
   if (!token) {
@@ -315,6 +322,17 @@ ${banner ? `<div class="banner" style="background:${banner.background};color:${b
       'cache-control': 'no-store, private',
     },
   });
+};
+
+
+const handler = async (payload: RoutePayload) => {
+  try {
+    return await run(payload);
+  } catch {
+    // A bad token, a deleted quotation, anything at all: the client sees the
+    // same page. Never a stack trace, and never a hint about which it was.
+    return notFoundPage();
+  }
 };
 
 export default defineLogicFunction({

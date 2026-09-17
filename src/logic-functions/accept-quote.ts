@@ -36,7 +36,7 @@ p{margin:0;color:#6b747f;font-size:14px}</style></head>
     },
   );
 
-const handler = async (payload: RoutePayload<AcceptBody>) => {
+const run = async (payload: RoutePayload<AcceptBody>) => {
   // The page posts a normal HTML form, so the body may arrive urlencoded.
   const body = payload.body ?? {};
   const raw = payload.rawBody ?? '';
@@ -156,6 +156,20 @@ const handler = async (payload: RoutePayload<AcceptBody>) => {
     `Quotation ${quote.documentNumber} has been accepted. Your contact has been notified and will be in touch about next steps.`,
     true,
   );
+};
+
+const handler = async (payload: RoutePayload<AcceptBody>) => {
+  try {
+    return await run(payload);
+  } catch {
+    // The person on the other end of this is a client who just pressed Accept.
+    // Whatever went wrong, they get a sentence they can act on.
+    return resultPage(
+      'Something went wrong',
+      'We could not record your acceptance. Please contact us directly and we will sort it out.',
+      false,
+    );
+  }
 };
 
 export default defineLogicFunction({
