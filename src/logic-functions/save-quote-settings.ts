@@ -47,7 +47,20 @@ const handler = async (payload: RoutePayload<Partial<QuoteSettings>>) => {
   if (requestedSequence < current.nextQuoteSequence) {
     return new Response(
       {
-        error: `The next number cannot go backwards. It is already at ${current.nextQuoteSequence} - moving it back would let two documents share a number.`,
+        error: `The next quotation number cannot go backwards. It is already at ${current.nextQuoteSequence} - moving it back would let two documents share a number.`,
+      },
+      { status: 422 },
+    );
+  }
+
+  const requestedInvoiceSequence = Math.round(
+    Number(incoming.nextInvoiceSequence ?? current.nextInvoiceSequence),
+  );
+
+  if (requestedInvoiceSequence < current.nextInvoiceSequence) {
+    return new Response(
+      {
+        error: `The next invoice number cannot go backwards. It is already at ${current.nextInvoiceSequence} - moving it back would let two invoices share a number.`,
       },
       { status: 422 },
     );
@@ -63,6 +76,18 @@ const handler = async (payload: RoutePayload<Partial<QuoteSettings>>) => {
     quotePrefix: (incoming.quotePrefix ?? current.quotePrefix).trim().slice(0, 10),
     quotePadding: clampPadding(incoming.quotePadding ?? current.quotePadding),
     nextQuoteSequence: Math.max(requestedSequence, 1),
+    invoicePrefix: (incoming.invoicePrefix ?? current.invoicePrefix)
+      .trim()
+      .slice(0, 10),
+    invoicePadding: clampPadding(incoming.invoicePadding ?? current.invoicePadding),
+    nextInvoiceSequence: Math.max(requestedInvoiceSequence, 1),
+    paymentTermsDays: Math.min(
+      Math.max(
+        Math.round(Number(incoming.paymentTermsDays ?? current.paymentTermsDays) || 14),
+        0,
+      ),
+      365,
+    ),
     validityDays: Math.min(
       Math.max(Math.round(Number(incoming.validityDays ?? current.validityDays) || 30), 1),
       365,

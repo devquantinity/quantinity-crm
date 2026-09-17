@@ -20,6 +20,11 @@ type Settings = {
   quotePrefix: string;
   quotePadding: number;
   nextQuoteSequence: number;
+  invoicePrefix: string;
+  invoicePadding: number;
+  nextInvoiceSequence: number;
+  paymentTermsDays: number;
+  paymentInstructions: string;
   validityDays: number;
   taxLabel: string;
   taxRate: number;
@@ -232,9 +237,9 @@ const BillingSettings = () => {
               lineHeight: 1.5,
             }}
           >
-            These details are copied onto a quotation the moment it is issued.
-            Changing them here affects future quotations only — anything already
-            sent keeps the details it was issued with.
+            These details are copied onto a quotation or invoice the moment it
+            is issued. Changing them here affects future documents only —
+            anything already sent keeps the details it was issued with.
           </p>
         </div>
 
@@ -293,7 +298,7 @@ const BillingSettings = () => {
         </Section>
 
         <Section
-          title="Numbering"
+          title="Quotation numbering"
           description="Quotations are numbered in one continuous sequence."
         >
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -358,6 +363,100 @@ const BillingSettings = () => {
               )}
             </b>
           </div>
+        </Section>
+
+        <Section
+          title="Invoice numbering and payment"
+          description="Invoices run their own sequence, separate from quotations."
+        >
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 120px' }}>
+              <Field label="Prefix">
+                <input
+                  id="invoice-prefix"
+                  style={input}
+                  value={settings.invoicePrefix}
+                  onChange={(e) => set('invoicePrefix', e.target.value)}
+                />
+              </Field>
+            </div>
+            <div style={{ flex: '1 1 100px' }}>
+              <Field label="Digits">
+                <input
+                  id="invoice-padding"
+                  type="number"
+                  min={1}
+                  max={10}
+                  style={input}
+                  value={settings.invoicePadding}
+                  onChange={(e) => set('invoicePadding', Number(e.target.value))}
+                />
+              </Field>
+            </div>
+            <div style={{ flex: '1 1 140px' }}>
+              <Field
+                label="Next number"
+                hint="Can be moved forward to match an existing series, never backward."
+              >
+                <input
+                  id="invoice-sequence"
+                  type="number"
+                  min={1}
+                  style={input}
+                  value={settings.nextInvoiceSequence}
+                  onChange={(e) =>
+                    set('nextInvoiceSequence', Number(e.target.value))
+                  }
+                />
+              </Field>
+            </div>
+          </div>
+          <div
+            style={{
+              background: COLORS.ground,
+              border: `1px solid ${COLORS.line}`,
+              borderRadius: '6px',
+              padding: '10px 12px',
+              fontSize: '13px',
+            }}
+          >
+            <span style={{ color: COLORS.muted }}>Next invoice will be </span>
+            <b style={{ fontFamily: 'ui-monospace, monospace' }}>
+              {settings.invoicePrefix}
+              {String(settings.nextInvoiceSequence).padStart(
+                Math.min(Math.max(settings.invoicePadding, 1), 10),
+                '0',
+              )}
+            </b>
+          </div>
+
+          <Field
+            label="Payment terms (days)"
+            hint="The due date is the issue date plus this many days."
+          >
+            <input
+              id="payment-terms-days"
+              type="number"
+              min={0}
+              max={365}
+              style={input}
+              value={settings.paymentTermsDays}
+              onChange={(e) => set('paymentTermsDays', Number(e.target.value))}
+            />
+          </Field>
+
+          <Field
+            label="Payment instructions"
+            hint="Bank name, account number and reference — printed on every invoice."
+          >
+            <textarea
+              id="payment-instructions"
+              style={{ ...input, minHeight: '72px', resize: 'vertical' }}
+              value={settings.paymentInstructions}
+              onChange={(e) => set('paymentInstructions', e.target.value)}
+              placeholder={'Maybank 5123 4567 8910\nQuantinity Sdn Bhd\nPlease quote the invoice number as reference.'}
+            />
+          </Field>
         </Section>
 
         <Section title="Currency, tax and terms">
@@ -500,6 +599,7 @@ const BillingSettings = () => {
 export default defineFrontComponent({
   universalIdentifier: BILLING_SETTINGS_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
   name: 'billing-settings',
-  description: 'Business details, numbering, tax and default terms for quotations',
+  description:
+    'Business details, numbering, tax, payment terms and default terms for quotations and invoices',
   component: BillingSettings,
 });

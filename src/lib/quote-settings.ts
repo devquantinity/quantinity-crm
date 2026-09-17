@@ -19,6 +19,13 @@ export type QuoteSettings = {
   quotePrefix: string;
   quotePadding: number;
   nextQuoteSequence: number;
+  // Invoices run their own sequence. An accountant expects INV-0001 to be the
+  // first invoice, not the first document of any kind.
+  invoicePrefix: string;
+  invoicePadding: number;
+  nextInvoiceSequence: number;
+  paymentTermsDays: number;
+  paymentInstructions: string;
   validityDays: number;
   taxLabel: string;
   taxRate: number;
@@ -34,6 +41,11 @@ export const DEFAULT_QUOTE_SETTINGS: QuoteSettings = {
   quotePrefix: 'Q-',
   quotePadding: 4,
   nextQuoteSequence: 1,
+  invoicePrefix: 'INV-',
+  invoicePadding: 4,
+  nextInvoiceSequence: 1,
+  paymentTermsDays: 14,
+  paymentInstructions: '',
   validityDays: 30,
   taxLabel: 'SST',
   taxRate: 0,
@@ -80,6 +92,15 @@ export const takeNextQuoteSequence = async (settings: QuoteSettings) => {
   const sequence = settings.nextQuoteSequence;
 
   await saveQuoteSettings({ ...settings, nextQuoteSequence: sequence + 1 });
+
+  return sequence;
+};
+
+/** Same counter, same caveat, different series. */
+export const takeNextInvoiceSequence = async (settings: QuoteSettings) => {
+  const sequence = settings.nextInvoiceSequence;
+
+  await saveQuoteSettings({ ...settings, nextInvoiceSequence: sequence + 1 });
 
   return sequence;
 };
