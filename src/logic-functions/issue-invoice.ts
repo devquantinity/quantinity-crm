@@ -88,6 +88,21 @@ const run = async (payload: RoutePayload<IssueInvoiceBody>) => {
   }
 
   const settings = await getQuoteSettings();
+
+  // Milestones carry the quotation's LINE amounts, which are pre-tax. An
+  // invoice therefore bills a pre-tax figure and shows no tax line. For a
+  // business that is not tax registered that is exactly right; for one that
+  // is, it would quietly bill the client less than they owe. Refuse loudly
+  // rather than underbill, until invoices carry tax of their own.
+  if (settings.isTaxRegistered) {
+    return new Response(
+      {
+        error: `Invoices do not carry ${settings.taxLabel || 'tax'} yet, and this workspace is registered for it - issuing would bill the client the pre-tax figure. Raise this invoice outside Quantinity for now.`,
+      },
+      { status: 501 },
+    );
+  }
+
   const currencyCode = invoice.amount?.currencyCode ?? settings.currencyCode;
 
   const issuedAt = new Date();
