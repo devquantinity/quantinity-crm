@@ -40,7 +40,13 @@ type Row = {
   unreadCount: number;
   lastMessageAt: string | null;
   opportunityName: string;
+  personId: string | null;
   window: ServiceWindow;
+};
+
+type LinkTargets = {
+  people: Array<{ id: string; name: string; companyName: string }>;
+  opportunities: Array<{ id: string; name: string; stage: string; companyName: string }>;
 };
 
 type ChatMessage = {
@@ -138,6 +144,9 @@ const Inbox = () => {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendNote, setSendNote] = useState('');
+  const [attaching, setAttaching] = useState(false);
+  const [targets, setTargets] = useState<LinkTargets | null>(null);
+  const [attachSearch, setAttachSearch] = useState('');
 
   const loadList = useCallback(
     () =>
@@ -224,6 +233,65 @@ const Inbox = () => {
 
     return flat.reverse();
   }, [thread]);
+
+  /**
+   * Attaching a conversation to whoever it is really with.
+   *
+   * The webhook links a number it recognises, but one nobody has filed - or one
+   * where two contacts share a tail, which it refuses to guess between - lands
+   * attached to nothing. Fixing that from a table rather than from here is the
+   * kind of chore that never gets done.
+   */
+  const openAttach = () => {
+    setAttaching((was) => !was);
+    setAttachSearch('');
+  };
+
+  const attach = async (patch: Record<string, string | null>) => {
+    if (!activeId) return;
+
+    setAttaching(false);
+
+    try {
+      await new RestApiClient().post('/s/conversations/link', {
+        conversationId: activeId,
+        ...patch,
+      });
+
+      // Re-read rather than guess: attaching a contact also pulls their company
+      // across, and the row's title is decided server side.
+      await loadList();
+    } catch (error) {
+      setSendNote(commandErrorMessage(error, 'Could not attach that'));
+    }
+  };
+
+  // Searched on the server, because the CRM has more contacts than any page
+  // size, and a picker that quietly stops finding people reads as "not in the
+  // system" rather than as a bug.
+  useEffect(() => {
+    if (!attaching) return;
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      new RestApiClient()
+        .get<LinkTargets>(
+          `/s/conversations/link-targets?q=${encodeURIComponent(attachSearch.trim())}`,
+        )
+        .then((result) => !cancelled && setTargets(result))
+        .catch(() => !cancelled && setTargets({ people: [], opportunities: [] }));
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [attaching, attachSearch]);
+
+  const attachMatches = {
+    people: targets?.people ?? [],
+    opportunities: targets?.opportunities ?? [],
+  };
 
   const send = async () => {
     const body = draft.trim();
@@ -460,14 +528,179 @@ const Inbox = () => {
 
         {active && (
           <>
-            <div style={{ padding: '10px 18px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: C.ink }}>{active.title}</div>
-              <div style={{ fontSize: '12px', color: C.muted }}>
-                {[active.companyName, active.handle, active.opportunityName]
-                  .filter(Boolean)
-                  .join(' · ')}
+            <div
+              style={{
+                padding: '10px 18px',
+                borderBottom: `1px solid ${C.line}`,
+                flexShrink: 0,
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: C.ink }}>
+                  {active.title}
+                </div>
+                <div style={{ fontSize: '12px', color: C.muted }}>
+                  {[active.companyName, active.handle, active.opportunityName]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={openAttach}
+                style={{
+                  flexShrink: 0,
+                  background: attaching ? C.tint : 'transparent',
+                  border: `1px solid ${C.line}`,
+                  borderRadius: '6px',
+                  padding: '5px 10px',
+                  fontSize: '12px',
+                  color: active.personId ? C.muted : C.accent,
+                  cursor: 'pointer',
+                }}
+              >
+                {active.personId ? 'Change link' : 'Attach to a contact'}
+              </button>
             </div>
+
+            {attaching && (
+              <div
+                style={{
+                  borderBottom: `1px solid ${C.line}`,
+                  background: C.surface,
+                  flexShrink: 0,
+                  maxHeight: '260px',
+                  overflowY: 'auto',
+                  padding: '10px 18px 12px',
+                }}
+              >
+                <input
+                  value={attachSearch}
+                  onChange={(event) => setAttachSearch(event.target.value)}
+                  placeholder="Search contacts and deals"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '7px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${C.line}`,
+                    fontSize: '12.5px',
+                    outline: 'none',
+                    marginBottom: '8px',
+                  }}
+                />
+
+                {!targets && (
+                  <div style={{ fontSize: '12px', color: C.muted }}>Loading&hellip;</div>
+                )}
+
+                {(active.personId || active.opportunityName) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void attach({ personId: null, companyId: null, opportunityId: null })
+                    }
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      border: 0,
+                      background: 'transparent',
+                      padding: '6px 4px',
+                      fontSize: '12.5px',
+                      color: C.danger,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Detach from everything
+                  </button>
+                )}
+
+                {attachMatches.people.length > 0 && (
+                  <div
+                    style={{
+                      fontSize: '10.5px',
+                      letterSpacing: '.08em',
+                      textTransform: 'uppercase',
+                      color: C.muted,
+                      margin: '8px 0 2px',
+                    }}
+                  >
+                    Contacts
+                  </div>
+                )}
+                {attachMatches.people.slice(0, 25).map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => void attach({ personId: row.id })}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      border: 0,
+                      background: row.id === active.personId ? C.tint : 'transparent',
+                      padding: '6px 4px',
+                      fontSize: '12.5px',
+                      color: C.ink,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {row.name}
+                    {row.companyName ? (
+                      <span style={{ color: C.muted }}> · {row.companyName}</span>
+                    ) : null}
+                  </button>
+                ))}
+
+                {attachMatches.opportunities.length > 0 && (
+                  <div
+                    style={{
+                      fontSize: '10.5px',
+                      letterSpacing: '.08em',
+                      textTransform: 'uppercase',
+                      color: C.muted,
+                      margin: '10px 0 2px',
+                    }}
+                  >
+                    Deals
+                  </div>
+                )}
+                {attachMatches.opportunities.slice(0, 25).map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => void attach({ opportunityId: row.id })}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      border: 0,
+                      background: 'transparent',
+                      padding: '6px 4px',
+                      fontSize: '12.5px',
+                      color: C.ink,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {row.name}
+                    {row.companyName ? (
+                      <span style={{ color: C.muted }}> · {row.companyName}</span>
+                    ) : null}
+                  </button>
+                ))}
+
+                {targets &&
+                  attachMatches.people.length === 0 &&
+                  attachMatches.opportunities.length === 0 && (
+                    <div style={{ fontSize: '12px', color: C.muted }}>Nothing matches that.</div>
+                  )}
+              </div>
+            )}
 
             {window_ && !window_.isOpen && (
               <div

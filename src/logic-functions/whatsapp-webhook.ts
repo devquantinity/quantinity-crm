@@ -19,6 +19,7 @@ import {
   type InboundMessage,
 } from 'src/lib/whatsapp-cloud';
 import { whatsAppConfig } from 'src/lib/whatsapp-config';
+import { matchContact, narrowingSuffix } from 'src/lib/contact-match';
 
 /**
  * Everything WhatsApp sends us: messages in, and delivery news about messages
@@ -82,6 +83,46 @@ const findConversationByHandle = async (client: any, handle: string) => {
     .find((node: any) => normaliseHandle(node.handle) === handle);
 };
 
+/**
+ * Who does this number belong to?
+ *
+ * Narrowed in the query on the last seven digits, then matched in memory. The
+ * shapes a phone gets stored in - split across a calling code, pasted whole,
+ * typed with dashes - are not something one filter can normalise, but they all
+ * end the same way, so the suffix is a cheap way to get from every contact in
+ * the CRM down to the few worth looking at properly.
+ */
+const matchPersonForHandle = async (client: any, handle: string) => {
+  const suffix = narrowingSuffix(handle);
+
+  if (!suffix) return { personId: null, companyId: null, reason: 'unusable number' };
+
+  const { people } = await client.query({
+    people: {
+      __args: {
+        filter: { phones: { primaryPhoneNumber: { ilike: `%${suffix}` } } },
+        first: 50,
+      },
+      edges: {
+        node: {
+          id: true,
+          phones: {
+            primaryPhoneNumber: true,
+            primaryPhoneCallingCode: true,
+            additionalPhones: { number: true, callingCode: true },
+          },
+          company: { id: true },
+        },
+      },
+    },
+  });
+
+  return matchContact({
+    handle,
+    contacts: (people?.edges ?? []).map((edge: any) => edge.node),
+  });
+};
+
 const alreadyStored = async (client: any, externalId: string) => {
   const { chatMessages } = await client.query({
     chatMessages: {
@@ -101,6 +142,10 @@ const receive = async (client: any, message: InboundMessage) => {
   let conversation = await findConversationByHandle(client, message.handle);
 
   if (!conversation) {
+    // A number we already know belongs on the right contact from the first
+    // message, not after somebody notices and links it by hand.
+    const match = await matchPersonForHandle(client, message.handle);
+
     const { createConversation } = await client.mutation({
       createConversation: {
         __args: {
@@ -110,6 +155,8 @@ const receive = async (client: any, message: InboundMessage) => {
             handle: message.handle,
             status: 'OPEN',
             unreadCount: 0,
+            ...(match.personId ? { personId: match.personId } : {}),
+            ...(match.companyId ? { companyId: match.companyId } : {}),
           },
         },
         id: true,
