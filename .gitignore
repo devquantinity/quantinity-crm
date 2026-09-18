@@ -44,3 +44,6 @@ yarn-error.log*
 
 # Gotka source, kept here as reference only - not part of this app
 gotech/
+
+# dev watcher log written by start-quantinity.command
+quantinity-dev.log
