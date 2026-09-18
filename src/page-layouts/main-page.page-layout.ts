@@ -45,9 +45,10 @@ export default definePageLayout({
       ],
     },
     {
-      // SPIKE B - a CANVAS tab is the one place a scrolling surface is allowed.
+      // A CANVAS tab is the one place a full-height scrolling surface is
+      // allowed, which is what makes a two-pane inbox possible in here at all.
       universalIdentifier: INBOX_PAGE_LAYOUT_TAB_UNIVERSAL_IDENTIFIER,
-      title: 'Inbox spike',
+      title: 'Inbox',
       position: 1,
       icon: 'IconBrandWhatsapp',
       layoutMode: PageLayoutTabLayoutMode.CANVAS,
