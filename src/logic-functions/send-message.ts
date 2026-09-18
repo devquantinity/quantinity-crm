@@ -8,9 +8,9 @@ import {
   messageLabel,
   outboundProblem,
   serviceWindow,
-  transportFor,
   type Channel,
 } from 'src/lib/messaging';
+import { transportFor } from 'src/lib/transport';
 
 /**
  * Send a reply.

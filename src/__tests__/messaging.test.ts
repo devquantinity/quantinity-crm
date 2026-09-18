@@ -13,7 +13,6 @@ import {
   serviceWindow,
   sortConversations,
   sortMessages,
-  transportFor,
   unconnectedTransport,
   unreadTotal,
   type MessageLike,
@@ -325,10 +324,5 @@ describe('sending', () => {
     expect(result.deliveryStatus).toBe('QUEUED');
     expect(result.externalId).toBeNull();
     expect(result.deliveryDetail).toContain('not delivered');
-  });
-
-  it('hands every channel the same stub until one is chosen', () => {
-    expect(transportFor('WHATSAPP').isConnected).toBe(false);
-    expect(transportFor('SMS').name).toBe('none');
   });
 });

@@ -399,15 +399,9 @@ export const unconnectedTransport: MessageTransport = {
   }),
 };
 
-/**
- * The one line that changes when the WhatsApp route is decided.
- *
- * Meta's Cloud API or an unofficial bridge - either way it is a MessageTransport
- * returned from here, and every caller already handles a send that does not
- * arrive, because that is what the stub does today.
- */
-export const transportFor = (_channel: Channel): MessageTransport =>
-  unconnectedTransport;
+// Choosing a transport needs process.env and fetch, so it lives in
+// src/lib/transport.ts. This module stays pure: the inbox imports it, and the
+// inbox runs in a sandboxed worker that has neither.
 
 /** Refuse before the transport is even asked. */
 export const outboundProblem = ({
