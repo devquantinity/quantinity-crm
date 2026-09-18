@@ -68,6 +68,7 @@ const run = async (_payload: RoutePayload) => {
       unreadCount: Math.max(0, Number(node.unreadCount ?? 0)),
       title: conversationLabel({
         personName,
+        conversationName: node.name,
         companyName: node.company?.name,
         handle: node.handle,
       }),

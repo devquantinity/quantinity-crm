@@ -109,16 +109,27 @@ export const previewOf = (body: string | null | undefined, max = 90) => {
 export const messageLabel = (body: string | null | undefined) =>
   previewOf(body, 50) || 'Message';
 
+/**
+ * What the inbox row is headed.
+ *
+ * The linked contact wins, because that name stays current when the contact is
+ * renamed. The conversation's own name comes next - someone typed it, so it
+ * beats a company or a bare number. The number is the last resort, and it is
+ * always something: a conversation with no handle cannot exist.
+ */
 export const conversationLabel = ({
   personName,
+  conversationName,
   companyName,
   handle,
 }: {
   personName?: string | null;
+  conversationName?: string | null;
   companyName?: string | null;
   handle?: string | null;
 }) =>
   collapse(personName) ||
+  collapse(conversationName) ||
   collapse(companyName) ||
   displayHandle(handle) ||
   'Unknown number';

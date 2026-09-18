@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   conversationAfterMessage,
+  conversationLabel,
   describeWindow,
   groupMessagesByDay,
   messageLabel,
@@ -70,6 +71,41 @@ describe('previews', () => {
   it('never leaves a record without a name', () => {
     expect(messageLabel('')).toBe('Message');
     expect(messageLabel('   ')).toBe('Message');
+  });
+});
+
+describe('conversationLabel', () => {
+  const handle = '012-345 6789';
+
+  it('prefers the linked contact, because that name stays current', () => {
+    expect(
+      conversationLabel({
+        personName: 'Nurul Huda',
+        conversationName: 'whoever this is',
+        companyName: 'Acme Trading',
+        handle,
+      }),
+    ).toBe('Nurul Huda');
+  });
+
+  it('falls back to the name someone typed on the conversation', () => {
+    expect(conversationLabel({ conversationName: 'Nurul Huda', handle })).toBe(
+      'Nurul Huda',
+    );
+  });
+
+  it('then the company, then the number - never a blank row', () => {
+    expect(conversationLabel({ companyName: 'Acme Trading', handle })).toBe(
+      'Acme Trading',
+    );
+    expect(conversationLabel({ handle })).toBe('+60123456789');
+    expect(conversationLabel({})).toBe('Unknown number');
+  });
+
+  it('ignores whitespace-only names rather than heading a row with nothing', () => {
+    expect(conversationLabel({ personName: '   ', conversationName: 'Nurul', handle })).toBe(
+      'Nurul',
+    );
   });
 });
 

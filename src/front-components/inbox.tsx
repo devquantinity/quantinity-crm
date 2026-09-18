@@ -1,5 +1,5 @@
 import { defineFrontComponent } from 'twenty-sdk/define';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
 import { INBOX_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
@@ -138,7 +138,6 @@ const Inbox = () => {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendNote, setSendNote] = useState('');
-  const bottom = useRef<HTMLDivElement | null>(null);
 
   const loadList = useCallback(
     () =>
@@ -184,10 +183,6 @@ const Inbox = () => {
     );
   }, [activeId]);
 
-  useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' });
-  }, [thread]);
-
   const matches = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const all = rows ?? [];
@@ -207,10 +202,28 @@ const Inbox = () => {
   );
 
   const window_ = thread?.window ?? active?.window ?? null;
-  const groups = useMemo(
-    () => groupMessagesByDay(thread?.messages ?? []),
-    [thread],
-  );
+  /**
+   * One flat list of day separators and bubbles, newest first.
+   *
+   * The scroller below is column-reverse, so the browser keeps it pinned to the
+   * newest message on its own. The alternative was scrollIntoView, which the
+   * sandboxed worker does not implement - it throws "is not a function" and
+   * takes the whole component down with it.
+   */
+  const items = useMemo(() => {
+    const flat: Array<
+      { kind: 'day'; key: string; at: string | null } | { kind: 'message'; key: string; message: ChatMessage }
+    > = [];
+
+    groupMessagesByDay(thread?.messages ?? []).forEach((group) => {
+      flat.push({ kind: 'day', key: `day-${group.key}`, at: group.messages[0]?.sentAt ?? null });
+      group.messages.forEach((message) =>
+        flat.push({ kind: 'message', key: message.id, message }),
+      );
+    });
+
+    return flat.reverse();
+  }, [thread]);
 
   const send = async () => {
     const body = draft.trim();
@@ -480,7 +493,7 @@ const Inbox = () => {
                 padding: '18px',
                 background: C.ground,
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection: 'column-reverse',
                 gap: '8px',
               }}
             >
@@ -498,9 +511,10 @@ const Inbox = () => {
                 </div>
               )}
 
-              {groups.map((group) => (
-                <div key={group.key} style={{ display: 'contents' }}>
+              {items.map((item) =>
+                item.kind === 'day' ? (
                   <div
+                    key={item.key}
                     style={{
                       alignSelf: 'center',
                       fontSize: '11px',
@@ -512,51 +526,47 @@ const Inbox = () => {
                       margin: '6px 0',
                     }}
                   >
-                    {dayLabel(group.messages[0]?.sentAt)}
+                    {dayLabel(item.at)}
                   </div>
+                ) : (
+                  <div
+                    key={item.key}
+                    title={item.message.deliveryDetail ?? ''}
+                    style={{
+                      alignSelf:
+                        item.message.direction === 'OUTBOUND' ? 'flex-end' : 'flex-start',
+                      maxWidth: '78%',
+                      background: item.message.direction === 'OUTBOUND' ? C.mine : C.surface,
+                      border: `1px solid ${C.line}`,
+                      borderRadius: '10px',
+                      padding: '8px 11px',
+                      fontSize: '13px',
+                      lineHeight: 1.45,
+                      color: C.ink,
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    <div>{item.message.body}</div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '5px',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        marginTop: '3px',
+                        fontSize: '10.5px',
+                        color: C.faint,
+                      }}
+                    >
+                      {timeLabel(item.message.sentAt)}
+                      {item.message.direction === 'OUTBOUND' && (
+                        <Ticks status={item.message.deliveryStatus} />
+                      )}
+                    </div>
+                  </div>
+                ),
+              )}
 
-                  {group.messages.map((message) => {
-                    const outbound = message.direction === 'OUTBOUND';
-
-                    return (
-                      <div
-                        key={message.id}
-                        title={message.deliveryDetail ?? ''}
-                        style={{
-                          alignSelf: outbound ? 'flex-end' : 'flex-start',
-                          maxWidth: '78%',
-                          background: outbound ? C.mine : C.surface,
-                          border: `1px solid ${C.line}`,
-                          borderRadius: '10px',
-                          padding: '8px 11px',
-                          fontSize: '13px',
-                          lineHeight: 1.45,
-                          color: C.ink,
-                          whiteSpace: 'pre-wrap',
-                        }}
-                      >
-                        <div>{message.body}</div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: '5px',
-                            alignItems: 'center',
-                            justifyContent: 'flex-end',
-                            marginTop: '3px',
-                            fontSize: '10.5px',
-                            color: C.faint,
-                          }}
-                        >
-                          {timeLabel(message.sentAt)}
-                          {outbound && <Ticks status={message.deliveryStatus} />}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-
-              <div ref={bottom} />
             </div>
 
             {sendNote && (
@@ -590,10 +600,10 @@ const Inbox = () => {
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    void send();
-                  }
+                  // No preventDefault: this is an <input>, so Enter inserts
+                  // nothing, and the sandboxed worker does not implement every
+                  // DOM method a real event has.
+                  if (event.key === 'Enter' && !event.shiftKey) void send();
                 }}
                 placeholder={`Reply to ${active.title}`}
                 style={{
