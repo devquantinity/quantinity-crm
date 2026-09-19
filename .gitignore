@@ -47,3 +47,8 @@ gotech/
 
 # dev watcher log written by start-quantinity.command
 quantinity-dev.log
+backups/
+backup-rehearsal.log
+quantinity-apply.log
+make-durable.log
+cli-help.txt
