@@ -11,8 +11,8 @@ the bottom and is the most useful part of this file.
 | 2 | Run it properly | done, reboot unverified |
 | 3 | Double-submit | **done, verified in the app** |
 | 4 | Route tests | done |
-| 5 | Unit test audit | in progress |
-| 6 | Docs | this file |
+| 5 | Unit test audit | done |
+| 6 | Docs | in progress |
 
 ## 1. Backups - blocked
 
@@ -156,3 +156,54 @@ Nothing here proves the route is wired to the right path, that auth is
 required where it should be, or that the response shape is what the front
 component expects. That needs a test runner that can reach the server, which
 from my sandbox is not possible - no route to localhost:2020.
+
+
+## 5. Unit test audit
+
+Done by listing every export in `src/lib` and checking whether any test file
+mentions it, rather than by reading the code and forming an impression.
+
+### Written this pass, in order of what they protect
+
+| Now covered | Why it mattered |
+|---|---|
+| `escapeHtml` | The XSS boundary on two **public, unauthenticated** client-facing pages |
+| `commandErrorMessage` | Without it every refusal reads "failed with status 422" and the real explanation is discarded |
+| `formatDocumentNumber` | Produces Q-0053. Padding is not cosmetic when an accountant reconciles |
+| `formatMoney` | The number a client pays from |
+| `lineAmountMicros` / `fromMicros` | Money arithmetic; floating-point dust is a cent that will not reconcile |
+| `addDays` | Quotation validity across month, year and leap boundaries |
+| route guards, webhook signature, in-flight | See sections 3 and 4 |
+
+### A second escapeHtml, found while doing this
+
+`public-quote-page.ts` carried its own inline copy, identical to the one in
+`invoice-document.ts`. That is how a security fix gets applied to one page and
+not the other, and nobody notices until the forgotten page is the one that
+matters. Both now use `src/lib/html.ts`, which additionally escapes the single
+quote - nothing puts a value inside a single-quoted attribute today, which is
+exactly why it is cheap now and expensive later.
+
+### Deliberately not covered, and why
+
+- **Constants** (`MICROS`, `GRAPH_API_BASE`, `SERVICE_WINDOW_MS`): a test would
+  restate the value.
+- **`quote-settings.*`**: every function touches `kv`. Testing needs a mock the
+  runner cannot provide. The sequence logic inside them is the risk, and it is
+  documented as a known limitation rather than tested.
+- **`whatsapp-config`, `transport`, `whatsapp-transport`**: read `process.env`
+  and call `fetch`. The pure decisions they rely on - payload shapes, error
+  extraction, status ordering - are covered in `whatsapp-cloud.test.ts`.
+- **Display helpers** (`dayKey`, `timeLabel`, `dayLabel`, `displayHandle`):
+  wrong output is visible immediately, on the screen, to the person using it.
+
+### Still inline, ranked by what goes wrong
+
+Thirteen routes still hold their refusals inline. In the order I would extract
+them:
+
+1. `create-invoice-from-milestone` - creates money documents
+2. `revise-quote`, `withdraw-quote` - move a quotation between states a client has seen
+3. `public-quote-page`, `public-invoice-page` - client-facing, and the 500-on-a-stale-link bug lived here once already
+4. `save-quote-settings` - can corrupt the numbering for every future document
+5. the rest - messaging and catalogue, where a bad refusal is an annoyance, not a wrong number on an invoice

@@ -39,12 +39,9 @@ export type InvoiceDocumentData = {
   milestone?: { name?: string | null } | null;
 };
 
-export const escapeHtml = (value: unknown) =>
-  String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+import { escapeHtml } from 'src/lib/html';
+
+export { escapeHtml };
 
 /**
  * Shown for a bad token, an unknown invoice and a draft alike - a client

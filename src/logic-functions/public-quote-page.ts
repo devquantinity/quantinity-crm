@@ -2,6 +2,8 @@ import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
+import { escapeHtml } from 'src/lib/html';
+
 import { PUBLIC_QUOTE_PAGE_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
 import {
   lineAmountMicros,
@@ -22,13 +24,6 @@ import type { QuoteIssuer } from 'src/lib/quote-settings';
  * A DRAFT is never shown: an unissued quote has no number, no frozen issuer
  * details and totals that can still move, so there is nothing safe to display.
  */
-
-const escapeHtml = (value: unknown) =>
-  String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 
 const notFoundPage = () =>
   new Response(
