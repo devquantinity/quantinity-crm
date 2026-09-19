@@ -122,6 +122,19 @@ object.
 The first row is the bug fix: before it, that refusal would have consumed Q-0053
 on its way to failing.
 
+### Re-checked after the refactors
+
+Moving refusals out of four handlers and into shared guards is exactly the kind
+of change that quietly breaks one of them, so the same records were fired at
+again afterwards:
+
+| After the refactor | Result |
+|---|---|
+| Issue INV-0003 (already issued) | still refuses, record untouched |
+| Mark INV-0004 paid (already paid) | still refuses, `Paid at` still 17 Sep 21:23 |
+| Withdraw Q-0052 (accepted) | still refuses, still Accepted, no new timeline entry |
+| Open Q-0051's client link | renders correctly after the escapeHtml change |
+
 
 ## 4. Route tests - done
 
