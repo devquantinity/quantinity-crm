@@ -32,30 +32,59 @@ quotations, projects, milestones and invoices on top of it.
    `docker:status` and `docker:logs` are the ones to reach for when it will
    not come up.
 
-3. Start the watcher, which builds the app and syncs it into the server:
+3. Build the app and sync it into the server:
 
    ```bash
-   npm run dev
+   ./apply.command
    ```
 
-   Leave it running while you work. It rebuilds on save.
+   One shot, then it exits. This is all you need to USE Quantinity - the app
+   lives in the container afterwards and keeps working.
+
+   While you are actively editing, run the watcher instead, which rebuilds on
+   every save:
+
+   ```bash
+   ./start-quantinity.command
+   ```
 
 4. Open [http://localhost:2020](http://localhost:2020) and log in with the
    default development credentials: `tim@apple.dev` / `tim@apple.dev`.
 
+5. Make it survive a reboot, once:
+
+   ```bash
+   ./make-durable.command
+   ```
+
+6. Take a backup and prove it restores, before any real client work:
+
+   ```bash
+   ./backup-rehearsal.command
+   ```
+
+   See [RUNBOOK.md](RUNBOOK.md) for both of these.
+
 ## Things that will bite you
 
-- **The watcher runs out of memory.** After roughly half an hour of
-  continuous rebuilding it dies with `JavaScript heap out of memory` and
-  takes `.twenty/output/` with it — the symptom is that your edits silently
-  stop reaching the app. `npm run dev` asks for an 8GB heap to push that
-  further out, but the leak is inside the CLI, so if the app stops picking
-  up changes, check that the watcher is still alive before doubting your
-  code. Stop it when you are not actively editing.
-- **The quotation and invoice sequences only move forward.** Issuing a
-  document while testing burns a number permanently. That is deliberate —
-  two documents must never share a number — but it means the counters drift
-  during development.
+- **The watcher runs out of memory.** After roughly half an hour to an hour of
+  continuous rebuilding it dies with `JavaScript heap out of memory` — the
+  symptom is that your edits silently stop reaching the app. The leak is inside
+  Twenty's CLI, not this app, so if changes stop appearing, check the watcher is
+  alive before doubting your code. `start-quantinity.command` restarts it
+  automatically and gives it an 8GB heap.
+
+  The better answer is not to run it: `./apply.command` does a one-shot sync and
+  exits, and there is nothing left running to leak.
+- **The quotation and invoice sequences only move forward.** Issuing a document
+  while testing burns a number permanently. That is deliberate — two documents
+  must never share a number — but it means the counters drift during
+  development. A *refused* issue no longer consumes one; that was a bug, and it
+  is fixed. Set the next number in Settings → Billing before real client work.
+
+- **`npm test` and `npm run lint` need macOS.** Both pull in native binaries
+  built for darwin-arm64, so they do not run inside a Linux sandbox. Run them
+  here.
 
 ## Verifying
 
@@ -63,6 +92,11 @@ quotations, projects, milestones and invoices on top of it.
 - `npm run typecheck` — type-check
 - `npm run test:unit` — unit tests, no server needed
 - `npm test` — integration tests, needs the server up
+
+## Operating it
+
+[RUNBOOK.md](RUNBOOK.md) — backups, restores, what breaks and what to do.
+[HARDENING.md](HARDENING.md) — what has been verified, and what has not.
 
 ## Reference
 

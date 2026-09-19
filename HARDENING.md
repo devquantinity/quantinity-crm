@@ -12,7 +12,7 @@ the bottom and is the most useful part of this file.
 | 3 | Double-submit | **done, verified in the app** |
 | 4 | Route tests | done |
 | 5 | Unit test audit | done |
-| 6 | Docs | in progress |
+| 6 | Docs | done |
 
 ## 1. Backups - blocked
 
@@ -207,3 +207,102 @@ them:
 3. `public-quote-page`, `public-invoice-page` - client-facing, and the 500-on-a-stale-link bug lived here once already
 4. `save-quote-settings` - can corrupt the numbering for every future document
 5. the rest - messaging and catalogue, where a bad refusal is an annoyance, not a wrong number on an invoice
+
+
+## 6. Docs - done
+
+- `RUNBOOK.md` - run it, back it up, restore it, and what to do when something
+  is wrong. Written for one person, as double-clicks.
+- `SETUP.md` - updated. The watcher is no longer presented as how you run this.
+- This file.
+
+---
+
+# What is still NOT production ready
+
+Ordered by what would hurt most. The first three are not code.
+
+### 1. There is still no working backup
+
+The rehearsal script is written and its first version is deleted, but **it has
+not been run in its fixed form**, so nothing has been dumped and nothing has
+been restored. Until `backup-rehearsal.command` runs and its two row counts
+match, a container problem loses every quotation and invoice.
+
+I cannot run it: my shell on the Mac is an isolated VM with only the connected
+folders mounted - no Docker, no `psql`, no route to localhost:2020.
+
+### 2. Everything is on one laptop
+
+Even once backups work, `backups/` sits on the same disk as the database. That
+covers a bad `docker volume rm`; it does not cover the laptop dying or being
+stolen. No off-machine copy was set up because the destination was never
+decided.
+
+### 3. This is running on a development image
+
+The container is `twentycrm/twenty-app-dev:latest`. Two things follow: it is a
+*dev* image, and `:latest` means the version underneath can change the next time
+it is pulled. Neither is dangerous today; both are the kind of thing that is
+obvious in hindsight after an upgrade eats an afternoon.
+
+### 4. Reboot survival is written, not observed
+
+`make-durable.command` sets the restart policy and reports what it found. I
+could not reboot the machine, so "survives a reboot" is reasoning. Reboot and
+open localhost:2020 to actually know.
+
+### 5. WhatsApp cannot receive anything
+
+Meta cannot reach `localhost`. Sending is wired and refuses honestly; inbound
+needs a public HTTPS URL and the Meta credentials, both of which are yours.
+Twenty's app settings already offer a custom domain for the `/s` routes.
+
+### 6. Document numbers are not atomic
+
+`kv` has no atomic increment, so two people issuing in the same instant could
+read the same sequence. Irrelevant while you are the only person issuing.
+Before anyone else does, this needs a real counter.
+
+### 7. The issue path narrows the race, it does not close it
+
+Two requests passing the pre-write re-check in the same instant both proceed.
+Closing it needs a conditional update the API does not offer. See section 3.
+
+### 8. SST is refused, not implemented
+
+Ticking "tax registered" makes invoices refuse to issue (501) rather than
+underbill. That is the safe behaviour and it is not a feature. Your decision.
+
+### 9. Test records are mixed in with real ones
+
+Quotes Q-0001, Q-0050, Q-0051, Q-0052 and a template copy; invoices INV-0002
+to INV-0004; three projects with milestones; two products; two conversations
+(one now attached to a real contact, Kathy Mcclain, by a test). Clear these
+before real client data joins them. I cannot delete records.
+
+### 10. Tests were verified by my runner, not by vitest
+
+`npm test` and `npm run lint` use binaries built for macOS and do not run in my
+sandbox. I ran all 213 assertions through a minimal runner I wrote, and checked
+it genuinely fails on a wrong expectation. That is honest but it is not the
+same thing. **Run `npm test` and `npm run lint` yourself.**
+
+### 11. No HTTP-level tests, and thirteen routes still untested
+
+The tests cover decisions, not routes. Nothing proves a route is on the right
+path, that auth is required where it should be, or that the response shape
+matches what the front component expects. Thirteen routes still hold refusals
+inline; section 5 ranks them.
+
+### 12. Nothing watches it
+
+If the container stops, you find out by opening the app. There is no alerting,
+no uptime check, no log aggregation. For one person that is a reasonable
+trade; it is worth knowing it is a trade.
+
+### 13. The public pages have no rate limiting
+
+`/s/quote` and `/s/invoice` are unauthenticated by design. The tokens are UUIDs,
+so guessing one is not realistic, but nothing throttles attempts and nothing
+logs them.
