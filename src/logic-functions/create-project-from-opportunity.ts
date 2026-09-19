@@ -82,6 +82,30 @@ const run = async (payload: RoutePayload<CreateProjectBody>) => {
 
   const contractValue = quote?.total ?? opportunity.amount ?? null;
 
+  // Last look. The "already has a project" check above reads the projects that
+  // came back with the opportunity at the top of this handler, which by now is a
+  // snapshot several steps old. A second request that got here first would
+  // otherwise give this deal two projects, each with its own milestones, and
+  // invoices would start being raised against whichever one you happened to
+  // open. Re-reading costs one round trip and is worth it.
+  const { projects: recheck } = await client.query({
+    projects: {
+      __args: { filter: { opportunityId: { eq: opportunityId } }, first: 1 },
+      edges: { node: { id: true, name: true } },
+    },
+  });
+
+  const alreadyThere = (recheck?.edges ?? [])[0]?.node;
+
+  if (alreadyThere) {
+    return new Response(
+      {
+        error: `A project (${alreadyThere.name}) was just started for this deal. Open that one rather than starting a second.`,
+      },
+      { status: 409 },
+    );
+  }
+
   const { createProject } = await client.mutation({
     createProject: {
       __args: {

@@ -165,6 +165,30 @@ const run = async (payload: RoutePayload<IssueInvoiceBody>) => {
     );
   }
 
+  // Last look before the number is taken. Everything above is reads, and the
+  // project and company are separate round trips, so a second request can have
+  // arrived and finished while this one was still gathering. See the longer
+  // note in issue-quote.ts - this narrows the window, it does not close it.
+  const { invoices: recheck } = await client.query({
+    invoices: {
+      __args: { filter: { id: { eq: invoice.id } }, first: 1 },
+      edges: { node: { id: true, status: true, documentNumber: true } },
+    },
+  });
+
+  const current = (recheck?.edges ?? [])[0]?.node;
+
+  if (current && current.status !== 'DRAFT') {
+    return new Response(
+      {
+        error: `This invoice was issued a moment ago${
+          current.documentNumber ? ` as ${current.documentNumber}` : ''
+        }. Refresh to see it.`,
+      },
+      { status: 409 },
+    );
+  }
+
   const documentNumber = formatDocumentNumber(
     settings.invoicePrefix,
     settings.invoicePadding,

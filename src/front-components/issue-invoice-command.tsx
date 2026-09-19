@@ -9,6 +9,7 @@ import {
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
 import { commandErrorMessage } from 'src/lib/command-error';
+import { runOnce } from 'src/lib/in-flight';
 import { resolveShareLink } from 'src/lib/share-url';
 import { ISSUE_INVOICE_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/invoice-identifiers';
 
@@ -37,26 +38,36 @@ const IssueInvoiceCommand = () => {
 
     if (choice !== 'confirm') return;
 
-    try {
-      const response = (await new RestApiClient().post('/s/invoices/issue', {
-        invoiceId: recordId,
-      })) as IssueInvoiceResponse;
+    const outcome = await runOnce('issue-invoice', recordId, async () => {
+      try {
+        const response = (await new RestApiClient().post('/s/invoices/issue', {
+          invoiceId: recordId,
+        })) as IssueInvoiceResponse;
 
-      const link = resolveShareLink(response.shareUrl, globalThis.location?.origin);
+        const link = resolveShareLink(response.shareUrl, globalThis.location?.origin);
 
-      if (link) await copyToClipboard(link);
+        if (link) await copyToClipboard(link);
 
+        await enqueueSnackbar({
+          message: `${response.documentNumber} issued, due ${response.dueDate}`,
+          variant: 'success',
+          detailedMessage: link
+            ? `Client link copied: ${link}`
+            : 'Could not build the client link - open the invoice and use its share token.',
+        });
+      } catch (error) {
+        await enqueueSnackbar({
+          message: commandErrorMessage(error, 'Could not issue the invoice'),
+          variant: 'error',
+        });
+      }
+    });
+
+    // Already running. Saying nothing would look like the click missed.
+    if (!outcome.ran) {
       await enqueueSnackbar({
-        message: `${response.documentNumber} issued, due ${response.dueDate}`,
-        variant: 'success',
-        detailedMessage: link
-          ? `Client link copied: ${link}`
-          : 'Could not build the client link - open the invoice and use its share token.',
-      });
-    } catch (error) {
-      await enqueueSnackbar({
-        message: commandErrorMessage(error, 'Could not issue the invoice'),
-        variant: 'error',
+        message: 'This invoice is already being issued.',
+        variant: 'info',
       });
     }
   };

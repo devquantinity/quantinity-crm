@@ -9,6 +9,7 @@ import {
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
 import { commandErrorMessage } from 'src/lib/command-error';
+import { runOnce } from 'src/lib/in-flight';
 import { resolveShareLink } from 'src/lib/share-url';
 
 import { ISSUE_QUOTE_COMMAND_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
@@ -52,41 +53,51 @@ const IssueQuoteCommand = () => {
       return;
     }
 
-    try {
-      const response = (await new RestApiClient().post('/s/quotes/issue', {
-        quoteId: recordId,
-      })) as IssueResponse;
+    const outcome = await runOnce('issue-quote', recordId, async () => {
+      try {
+        const response = (await new RestApiClient().post('/s/quotes/issue', {
+          quoteId: recordId,
+        })) as IssueResponse;
 
-      if (!response?.ok) {
+        if (!response?.ok) {
+          await enqueueSnackbar({
+            message: response?.error ?? 'Could not issue this quote',
+            variant: 'error',
+          });
+          return;
+        }
+
+        // Front components run in a sandboxed worker, so `location` may not be
+        // there. Fall back to the path rather than pasting "undefined/s/quote".
+        const shareLink = resolveShareLink(
+          response.shareUrl,
+          globalThis.location?.origin,
+        );
+
+        if (shareLink) {
+          await copyToClipboard(shareLink);
+        }
+
         await enqueueSnackbar({
-          message: response?.error ?? 'Could not issue this quote',
+          message: `${response.documentNumber} issued`,
+          variant: 'success',
+          detailedMessage: shareLink
+            ? `Client link copied to clipboard: ${shareLink}`
+            : undefined,
+        });
+      } catch (error) {
+        await enqueueSnackbar({
+          message: commandErrorMessage(error, 'Could not issue this quote'),
           variant: 'error',
         });
-        return;
       }
+    });
 
-      // Front components run in a sandboxed worker, so `location` may not be
-      // there. Fall back to the path rather than pasting "undefined/s/quote".
-      const shareLink = resolveShareLink(
-        response.shareUrl,
-        globalThis.location?.origin,
-      );
-
-      if (shareLink) {
-        await copyToClipboard(shareLink);
-      }
-
+    // Already running. Saying nothing would look like the click missed.
+    if (!outcome.ran) {
       await enqueueSnackbar({
-        message: `${response.documentNumber} issued`,
-        variant: 'success',
-        detailedMessage: shareLink
-          ? `Client link copied to clipboard: ${shareLink}`
-          : undefined,
-      });
-    } catch (error) {
-      await enqueueSnackbar({
-        message: commandErrorMessage(error, 'Could not issue this quote'),
-        variant: 'error',
+        message: 'This quotation is already being issued.',
+        variant: 'info',
       });
     }
   };

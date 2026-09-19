@@ -8,6 +8,7 @@ import {
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
 import { commandErrorMessage } from 'src/lib/command-error';
+import { runOnce } from 'src/lib/in-flight';
 import { MARK_PAID_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/invoice-identifiers';
 
 type MarkPaidResponse = { documentNumber?: string };
@@ -30,19 +31,29 @@ const MarkInvoicePaidCommand = () => {
 
     if (choice !== 'confirm') return;
 
-    try {
-      const response = (await new RestApiClient().post('/s/invoices/mark-paid', {
-        invoiceId: recordId,
-      })) as MarkPaidResponse;
+    const outcome = await runOnce('mark-paid', recordId, async () => {
+      try {
+        const response = (await new RestApiClient().post('/s/invoices/mark-paid', {
+          invoiceId: recordId,
+        })) as MarkPaidResponse;
 
+        await enqueueSnackbar({
+          message: `${response.documentNumber} marked paid`,
+          variant: 'success',
+        });
+      } catch (error) {
+        await enqueueSnackbar({
+          message: commandErrorMessage(error, 'Could not mark the invoice paid'),
+          variant: 'error',
+        });
+      }
+    });
+
+    // Already running. Saying nothing would look like the click missed.
+    if (!outcome.ran) {
       await enqueueSnackbar({
-        message: `${response.documentNumber} marked paid`,
-        variant: 'success',
-      });
-    } catch (error) {
-      await enqueueSnackbar({
-        message: commandErrorMessage(error, 'Could not mark the invoice paid'),
-        variant: 'error',
+        message: 'This invoice is already being marked paid.',
+        variant: 'info',
       });
     }
   };

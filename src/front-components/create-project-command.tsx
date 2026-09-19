@@ -10,6 +10,7 @@ import {
 import { RestApiClient } from 'twenty-client-sdk/rest';
 
 import { commandErrorMessage } from 'src/lib/command-error';
+import { runOnce } from 'src/lib/in-flight';
 import { CREATE_PROJECT_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/project-identifiers';
 
 /** Hand a won deal off to delivery, from the deal page. */
@@ -42,32 +43,42 @@ const CreateProjectCommand = () => {
       return;
     }
 
-    try {
-      const response = (await new RestApiClient().post(
-        '/s/projects/create-from-opportunity',
-        { opportunityId: recordId },
-      )) as CreateProjectResponse;
+    const outcome = await runOnce('start-project', recordId, async () => {
+      try {
+        const response = (await new RestApiClient().post(
+          '/s/projects/create-from-opportunity',
+          { opportunityId: recordId },
+        )) as CreateProjectResponse;
 
-      const seeded = response.seededMilestones ?? 0;
+        const seeded = response.seededMilestones ?? 0;
 
-      await enqueueSnackbar({
-        message: `${response.name} started`,
-        variant: 'success',
-        detailedMessage: response.fromQuote
-          ? `${seeded} milestone${seeded === 1 ? '' : 's'} from ${response.fromQuote}.`
-          : 'No accepted quotation found, so the project starts empty.',
-      });
+        await enqueueSnackbar({
+          message: `${response.name} started`,
+          variant: 'success',
+          detailedMessage: response.fromQuote
+            ? `${seeded} milestone${seeded === 1 ? '' : 's'} from ${response.fromQuote}.`
+            : 'No accepted quotation found, so the project starts empty.',
+        });
 
-      if (response.projectId) {
-        await navigate(AppPath.RecordShowPage, {
-          objectNameSingular: 'project',
-          objectRecordId: response.projectId,
+        if (response.projectId) {
+          await navigate(AppPath.RecordShowPage, {
+            objectNameSingular: 'project',
+            objectRecordId: response.projectId,
+          });
+        }
+      } catch (error) {
+        await enqueueSnackbar({
+          message: commandErrorMessage(error, 'Could not start the project'),
+          variant: 'error',
         });
       }
-    } catch (error) {
+    });
+
+    // Already running. Saying nothing would look like the click missed.
+    if (!outcome.ran) {
       await enqueueSnackbar({
-        message: commandErrorMessage(error, 'Could not start the project'),
-        variant: 'error',
+        message: 'A project is already being started for this deal.',
+        variant: 'info',
       });
     }
   };

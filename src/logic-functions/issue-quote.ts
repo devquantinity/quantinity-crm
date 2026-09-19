@@ -154,14 +154,6 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
   // NOT take another one - Q-0001 Rev 2 is the same document, not a second one.
   const isRevision = Boolean(quote.documentNumber);
 
-  const documentNumber = isRevision
-    ? String(quote.documentNumber)
-    : formatDocumentNumber(
-        settings.quotePrefix,
-        settings.quotePadding,
-        await takeNextQuoteSequence(settings),
-      );
-
   const issuedAt = new Date();
   const validUntil = addDays(issuedAt, settings.validityDays);
   // Fetched separately: asking for quote -> opportunity -> company in one
@@ -210,6 +202,53 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
       { status: 422 },
     );
   }
+
+  // Last look before anything irreversible happens.
+  //
+  // Everything above this line is reads and arithmetic, and some of it is slow -
+  // the company is a second round trip on purpose. That is a long time to hold a
+  // decision made from a snapshot. If a second request got here first while we
+  // were working, the quote is no longer DRAFT and this one must not issue it
+  // again: two document numbers, two client links, one quotation.
+  //
+  // This is not a lock. Two requests that pass this check within the same
+  // instant will both proceed, and closing that properly needs a conditional
+  // update the API does not offer. What it does remove is the realistic case -
+  // a second click landing while the first is still doing its round trips -
+  // which is a window of hundreds of milliseconds rather than none.
+  const { quotes: recheck } = await client.query({
+    quotes: {
+      __args: { filter: { id: { eq: quoteId } }, first: 1 },
+      edges: { node: { id: true, status: true, documentNumber: true } },
+    },
+  });
+
+  const current = (recheck?.edges ?? [])[0]?.node;
+
+  if (current && current.status !== 'DRAFT') {
+    return new Response(
+      {
+        error: `This quotation was issued a moment ago${
+          current.documentNumber ? ` as ${current.documentNumber}` : ''
+        }. Refresh to see it.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  // The number is taken HERE, last, and only once nothing can still refuse.
+  //
+  // It used to be assigned before the "nobody to bill" check below, which meant
+  // a quotation with no client on it consumed Q-0053 and then refused - leaving
+  // a hole in the sequence with no document to explain it. An accountant finds
+  // that gap a year later and nobody can say what happened to it.
+  const documentNumber = isRevision
+    ? String(quote.documentNumber)
+    : formatDocumentNumber(
+        settings.quotePrefix,
+        settings.quotePadding,
+        await takeNextQuoteSequence(settings),
+      );
 
   const revision = Number(quote.revision ?? 1);
   const documentLabel =
