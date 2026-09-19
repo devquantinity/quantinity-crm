@@ -2,6 +2,8 @@ import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
+import { startProjectRefusal } from 'src/lib/route-guards';
+
 import { CREATE_PROJECT_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/project-identifiers';
 import { milestonesFromQuoteLines } from 'src/lib/quote-math';
 
@@ -56,15 +58,15 @@ const run = async (payload: RoutePayload<CreateProjectBody>) => {
     return new Response({ error: 'Opportunity not found' }, { status: 404 });
   }
 
-  const existing = opportunity.projects?.edges ?? [];
+  const refusal = startProjectRefusal({
+    opportunity,
+    existingProjects: (opportunity.projects?.edges ?? []).map(
+      (edge: any) => edge.node,
+    ),
+  });
 
-  if (existing.length > 0) {
-    return new Response(
-      {
-        error: `This deal already has a project (${(existing[0] as any).node.name}). Open that one rather than starting a second.`,
-      },
-      { status: 409 },
-    );
+  if (refusal) {
+    return new Response({ error: refusal.error }, { status: refusal.status });
   }
 
   // Most recently accepted quote wins - a revision supersedes what came before.

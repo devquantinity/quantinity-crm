@@ -1,5 +1,3 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
 import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
@@ -19,6 +17,7 @@ import {
   type InboundMessage,
 } from 'src/lib/whatsapp-cloud';
 import { whatsAppConfig } from 'src/lib/whatsapp-config';
+import { isValidMetaSignature, signatureHeaderOf } from 'src/lib/webhook-signature';
 import { matchContact, narrowingSuffix } from 'src/lib/contact-match';
 
 /**
@@ -35,28 +34,12 @@ import { matchContact, narrowingSuffix } from 'src/lib/contact-match';
  * logs. The one exception is a bad signature, which is a 401 on purpose.
  */
 
-const signatureIsValid = (payload: RoutePayload, appSecret: string) => {
-  const header =
-    payload.headers?.['x-hub-signature-256'] ??
-    payload.headers?.['X-Hub-Signature-256'];
-  const raw = payload.rawBody;
-
-  // No secret configured, no raw body to check, or no signature sent: refuse.
-  // A check that cannot run must never be a check that passes.
-  if (!appSecret || typeof raw !== 'string' || !header?.startsWith('sha256=')) {
-    return false;
-  }
-
-  const expected = Buffer.from(
-    createHmac('sha256', appSecret).update(raw, 'utf8').digest('hex'),
-    'hex',
-  );
-  const provided = Buffer.from(header.slice('sha256='.length), 'hex');
-
-  return (
-    expected.length === provided.length && timingSafeEqual(expected, provided)
-  );
-};
+const signatureIsValid = (payload: RoutePayload, appSecret: string) =>
+  isValidMetaSignature({
+    rawBody: payload.rawBody,
+    header: signatureHeaderOf(payload.headers),
+    appSecret,
+  });
 
 const findConversationByHandle = async (client: any, handle: string) => {
   const { conversations } = await client.query({

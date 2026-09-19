@@ -10,8 +10,8 @@ the bottom and is the most useful part of this file.
 | 1 | Backups | **Blocked** - script ready, needs one run on the Mac |
 | 2 | Run it properly | done, reboot unverified |
 | 3 | Double-submit | **done, verified in the app** |
-| 4 | Route tests | in progress |
-| 5 | Unit test audit | not started |
+| 4 | Route tests | done |
+| 5 | Unit test audit | in progress |
 | 6 | Docs | this file |
 
 ## 1. Backups - blocked
@@ -121,3 +121,38 @@ object.
 
 The first row is the bug fix: before it, that refusal would have consumed Q-0053
 on its way to failing.
+
+
+## 4. Route tests - done
+
+The handlers import `CoreApiClient` directly, so testing them as they stood
+meant mocking a module, which my runner cannot do, or standing up a database
+and putting a record into exactly the wrong state - which is why none of this
+had ever been tested.
+
+So the refusals moved out instead, into `src/lib/route-guards.ts` and
+`src/lib/webhook-signature.ts`, and the handlers now call them. The refusals
+are the part worth testing: a happy path announces itself the first time you
+use the app, while a refusal that stops working is silent, and what it stops is
+a client receiving a quotation addressed to nobody, or a second invoice for the
+same money.
+
+Covered: quote not found / not a draft / no lines / blank line descriptions;
+invoice not found / not a draft / zero amount / **tax-registered underbilling**;
+paid twice / paid before issued / paid after void; a deal getting a second
+project; a required id missing. Plus the webhook signature - tampered body,
+wrong secret, no secret, no raw body, malformed and truncated headers.
+
+One test failed on the first run and it was the test's fault: I reimplemented
+`lineLabel` in the test file rather than importing it, and my copy used `??`
+where the real one trims and falls through. The test now imports the real
+function. A reimplemented helper drifts from the thing it stands in for, and
+then the test passes while the route does something else.
+
+### What this does NOT cover
+
+These are handler-level tests of the decisions, not HTTP tests of the routes.
+Nothing here proves the route is wired to the right path, that auth is
+required where it should be, or that the response shape is what the front
+component expects. That needs a test runner that can reach the server, which
+from my sandbox is not possible - no route to localhost:2020.

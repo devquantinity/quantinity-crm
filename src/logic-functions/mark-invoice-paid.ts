@@ -2,6 +2,8 @@ import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
+import { markPaidRefusal } from 'src/lib/route-guards';
+
 import { MARK_INVOICE_PAID_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/invoice-identifiers';
 
 /**
@@ -41,29 +43,10 @@ const run = async (payload: RoutePayload<MarkPaidBody>) => {
     return new Response({ error: 'Invoice not found' }, { status: 404 });
   }
 
-  if (invoice.status === 'PAID') {
-    return new Response(
-      {
-        error: `${invoice.documentNumber} is already marked paid${
-          invoice.paidAt ? ` (${String(invoice.paidAt).slice(0, 10)})` : ''
-        }.`,
-      },
-      { status: 409 },
-    );
-  }
+  const refusal = markPaidRefusal({ invoice });
 
-  if (invoice.status === 'DRAFT') {
-    return new Response(
-      { error: 'This invoice has not been issued yet, so it cannot have been paid.' },
-      { status: 409 },
-    );
-  }
-
-  if (invoice.status === 'VOID') {
-    return new Response(
-      { error: 'A voided invoice cannot be paid. Raise a new one.' },
-      { status: 409 },
-    );
+  if (refusal) {
+    return new Response({ error: refusal.error }, { status: refusal.status });
   }
 
   await client.mutation({

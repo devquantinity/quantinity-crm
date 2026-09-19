@@ -2,6 +2,8 @@ import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
+import { issueInvoiceRefusal } from 'src/lib/route-guards';
+
 import { ISSUE_INVOICE_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/invoice-identifiers';
 import {
   getQuoteSettings,
@@ -55,38 +57,30 @@ const run = async (payload: RoutePayload<IssueInvoiceBody>) => {
     return new Response({ error: 'Invoice not found' }, { status: 404 });
   }
 
-  if (invoice.status !== 'DRAFT') {
-    return new Response(
-      {
-        error: `This invoice is ${String(invoice.status).toLowerCase()}, only a draft can be issued.`,
-        documentNumber: invoice.documentNumber,
-      },
-      { status: 409 },
-    );
-  }
-
   const amountMicros = Number(invoice.amount?.amountMicros ?? 0);
-
-  if (amountMicros <= 0) {
-    return new Response(
-      { error: 'An invoice for nothing cannot be issued. Set an amount first.' },
-      { status: 422 },
-    );
-  }
-
   const settings = await getQuoteSettings();
 
-  // Milestones carry the quotation's LINE amounts, which are pre-tax. An
-  // invoice therefore bills a pre-tax figure and shows no tax line. For a
-  // business that is not tax registered that is exactly right; for one that
-  // is, it would quietly bill the client less than they owe. Refuse loudly
-  // rather than underbill, until invoices carry tax of their own.
-  if (settings.isTaxRegistered) {
+  // Every reason to refuse lives in src/lib/route-guards.ts, where it can be
+  // tested without standing up a database. Notably the tax one: milestones
+  // carry the quotation's pre-tax LINE amounts, so a registered business would
+  // be billing the client less than they owe. That refusal is a 501 - not the
+  // user's mistake, a feature that does not exist yet.
+  const refusal = issueInvoiceRefusal({
+    invoice,
+    amountMicros,
+    isTaxRegistered: settings.isTaxRegistered,
+    taxLabel: settings.taxLabel,
+  });
+
+  if (refusal) {
     return new Response(
       {
-        error: `Invoices do not carry ${settings.taxLabel || 'tax'} yet, and this workspace is registered for it - issuing would bill the client the pre-tax figure. Raise this invoice outside Quantinity for now.`,
+        error: refusal.error,
+        ...(refusal.status === 409
+          ? { documentNumber: invoice.documentNumber }
+          : {}),
       },
-      { status: 501 },
+      { status: refusal.status },
     );
   }
 

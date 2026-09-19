@@ -2,6 +2,8 @@ import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
+import { issueQuoteRefusal } from 'src/lib/route-guards';
+
 import { ISSUE_QUOTE_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 import {
   calculateTotals,
@@ -83,39 +85,20 @@ const handler = async (payload: RoutePayload<IssueQuoteBody>) => {
     return new Response({ error: 'Quote not found' }, { status: 404 });
   }
 
-  // Issuing is only legal from DRAFT. Anything else is a double-click, a retry,
-  // or someone trying to re-issue a document a client already has.
-  if (quote.status !== 'DRAFT') {
-    return new Response(
-      {
-        error: `Quote is ${quote.status}, only a DRAFT can be issued`,
-        documentNumber: quote.documentNumber,
-      },
-      { status: 409 },
-    );
-  }
-
   const settings = await getQuoteSettings();
-
   const items = (quote.quoteItems?.edges ?? []).map((edge: any) => edge.node);
 
-  if (items.length === 0) {
-    return new Response(
-      { error: 'A quote needs at least one line item before it can be issued' },
-      { status: 422 },
-    );
-  }
+  // Every refusal below runs BEFORE the sequence number is taken, and they all
+  // live in src/lib/route-guards.ts so they can be tested without a database.
+  const refusal = issueQuoteRefusal({ quote, lines: items, lineLabel });
 
-  // Every check below runs BEFORE the sequence number is taken. A refused issue
-  // must not leave a hole in the numbering.
-  const unlabelled = items.filter((item: any) => lineLabel(item).length === 0);
-
-  if (unlabelled.length > 0) {
+  if (refusal) {
     return new Response(
       {
-        error: `${unlabelled.length} line item${unlabelled.length === 1 ? ' has' : 's have'} no description. A client cannot be asked to accept a blank line.`,
+        error: refusal.error,
+        ...(refusal.status === 409 ? { documentNumber: quote.documentNumber } : {}),
       },
-      { status: 422 },
+      { status: refusal.status },
     );
   }
 
