@@ -9,8 +9,8 @@ the bottom and is the most useful part of this file.
 |---|------|-------|
 | 1 | Backups | **Blocked** - script ready, needs one run on the Mac |
 | 2 | Run it properly | done, reboot unverified |
-| 3 | Double-submit | code done, verifying |
-| 4 | Route tests | not started |
+| 3 | Double-submit | **done, verified in the app** |
+| 4 | Route tests | in progress |
 | 5 | Unit test audit | not started |
 | 6 | Docs | this file |
 
@@ -108,3 +108,16 @@ For one person this is comfortably enough. If a second person ever issues
 documents here, it needs a real claim: a token written to the record and read
 back before proceeding, which costs two extra round trips and a field on each
 object.
+
+### Verified in the running app, not reasoned about
+
+| Fired | Against | Result |
+|-------|---------|--------|
+| Issue quotation | a draft with no deal attached | 422, and **Q-0053 was still Q-0053 afterwards** |
+| Issue quotation | Q-0051, already issued | `POST /s/quotes/issue` returned **409**, one request, not two |
+| Issue invoice | INV-0003, already issued | "This invoice is issued, only a draft can be issued." |
+| Mark paid | INV-0004, already paid | "INV-0004 is already marked paid" |
+| Start project | a deal that already has one | no second project - All Projects still 3 |
+
+The first row is the bug fix: before it, that refusal would have consumed Q-0053
+on its way to failing.
