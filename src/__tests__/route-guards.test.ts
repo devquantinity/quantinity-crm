@@ -6,7 +6,9 @@ import {
   issueQuoteRefusal,
   markPaidRefusal,
   missingId,
+  reviseQuoteRefusal,
   startProjectRefusal,
+  withdrawQuoteRefusal,
 } from 'src/lib/route-guards';
 // The real one, not a copy: a reimplemented helper drifts from the thing it
 // stands in for, and then the test passes while the route does something else.
@@ -327,5 +329,77 @@ describe('billing a milestone', () => {
         billedDescription: '',
       })?.status,
     ).toBe(404);
+  });
+});
+
+describe('revising a quotation', () => {
+  it('revises something already sent', () => {
+    expect(
+      reviseQuoteRefusal({ quote: { status: 'ISSUED', documentNumber: 'Q-0051' } }),
+    ).toBeNull();
+  });
+
+  it('revises a declined or expired one, because that is the point', () => {
+    // A client said no, or ran out of time. Revising is how you go back with a
+    // different offer under the same document number.
+    (['DECLINED', 'EXPIRED', 'ACCEPTED'] as const).forEach((status) => {
+      expect(reviseQuoteRefusal({ quote: { status, documentNumber: 'Q-0051' } })).toBeNull();
+    });
+  });
+
+  it('will not revise a draft - that would just duplicate it', () => {
+    const refusal = reviseQuoteRefusal({ quote: { status: 'DRAFT', documentNumber: null } });
+
+    expect(refusal?.status).toBe(409);
+    expect(refusal?.error).toContain('Edit it directly');
+  });
+
+  it('will not revise something with no number to carry forward', () => {
+    // Q-0001 Rev 2 is the same document. Without a number there is no identity
+    // for the revision to inherit.
+    const refusal = reviseQuoteRefusal({ quote: { status: 'ISSUED', documentNumber: '' } });
+
+    expect(refusal?.status).toBe(409);
+    expect(refusal?.error).toContain('numbered');
+  });
+
+  it('will not revise one that does not exist', () => {
+    expect(reviseQuoteRefusal({ quote: null })?.status).toBe(404);
+  });
+});
+
+describe('withdrawing a quotation', () => {
+  it('withdraws one that is out with a client', () => {
+    expect(
+      withdrawQuoteRefusal({ quote: { status: 'ISSUED', documentNumber: 'Q-0051' } }),
+    ).toBeNull();
+  });
+
+  it('refuses an accepted one in its own words', () => {
+    // Deliberately a different sentence from the generic refusal. Cancelling
+    // something a client accepted is a conversation, and a CRM that does it
+    // silently lets you forget you did.
+    const refusal = withdrawQuoteRefusal({
+      quote: { status: 'ACCEPTED', documentNumber: 'Q-0052' },
+    });
+
+    expect(refusal?.status).toBe(409);
+    expect(refusal?.error).toContain('Q-0052');
+    expect(refusal?.error).toContain('conversation with the client');
+  });
+
+  it('will not withdraw what was never issued', () => {
+    const refusal = withdrawQuoteRefusal({ quote: { status: 'DRAFT' } });
+
+    expect(refusal?.status).toBe(409);
+    expect(refusal?.error).toContain('draft');
+  });
+
+  it('will not withdraw one twice', () => {
+    expect(withdrawQuoteRefusal({ quote: { status: 'WITHDRAWN' } })?.status).toBe(409);
+  });
+
+  it('will not withdraw one that does not exist', () => {
+    expect(withdrawQuoteRefusal({ quote: null })?.status).toBe(404);
   });
 });

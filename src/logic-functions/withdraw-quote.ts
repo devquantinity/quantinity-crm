@@ -2,6 +2,8 @@ import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
+import { withdrawQuoteRefusal } from 'src/lib/route-guards';
+
 import { WITHDRAW_QUOTE_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 
 /**
@@ -41,22 +43,10 @@ const handler = async (payload: RoutePayload<WithdrawBody>) => {
     return new Response({ error: 'Quote not found' }, { status: 404 });
   }
 
-  if (quote.status === 'ACCEPTED') {
-    return new Response(
-      {
-        error: `${quote.documentNumber} has already been accepted. Cancelling an accepted quotation is a conversation with the client, not a status change.`,
-      },
-      { status: 409 },
-    );
-  }
+  const refusal = withdrawQuoteRefusal({ quote });
 
-  if (quote.status !== 'ISSUED') {
-    return new Response(
-      {
-        error: `Only an issued quotation can be withdrawn. This one is ${String(quote.status).toLowerCase()}.`,
-      },
-      { status: 409 },
-    );
+  if (refusal) {
+    return new Response({ error: refusal.error }, { status: refusal.status });
   }
 
   await client.mutation({

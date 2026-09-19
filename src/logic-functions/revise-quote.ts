@@ -2,6 +2,8 @@ import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
+import { reviseQuoteRefusal } from 'src/lib/route-guards';
+
 import { REVISE_QUOTE_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 
 /**
@@ -62,19 +64,10 @@ const handler = async (payload: RoutePayload<ReviseBody>) => {
     return new Response({ error: 'Quote not found' }, { status: 404 });
   }
 
-  // A draft is already editable - revising it would just create a duplicate.
-  if (quote.status === 'DRAFT') {
-    return new Response(
-      { error: 'This quote is still a draft. Edit it directly instead.' },
-      { status: 409 },
-    );
-  }
+  const refusal = reviseQuoteRefusal({ quote });
 
-  if (!quote.documentNumber) {
-    return new Response(
-      { error: 'Only a numbered quote can be revised' },
-      { status: 409 },
-    );
+  if (refusal) {
+    return new Response({ error: refusal.error }, { status: refusal.status });
   }
 
   const nextRevision = Number(quote.revision ?? 1) + 1;

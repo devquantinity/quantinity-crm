@@ -220,6 +220,71 @@ export const billMilestoneRefusal = ({
   return ok;
 };
 
+// --- moving a quotation a client has already seen -------------------------
+
+/**
+ * Whether this quotation can be revised.
+ *
+ * A revision keeps the document number and increments the revision - Q-0001
+ * Rev 2 is the same document, not a second one. That only makes sense for
+ * something already sent; a draft is edited in place, and an unnumbered quote
+ * has no identity to carry forward.
+ */
+export const reviseQuoteRefusal = ({
+  quote,
+}: {
+  quote: { status?: string | null; documentNumber?: string | null } | null | undefined;
+}): GuardResult => {
+  if (!quote) return { error: 'Quote not found', status: 404 };
+
+  if (quote.status === 'DRAFT') {
+    return {
+      error: 'This quote is still a draft. Edit it directly instead.',
+      status: 409,
+    };
+  }
+
+  if (!quote.documentNumber) {
+    return { error: 'Only a numbered quote can be revised', status: 409 };
+  }
+
+  return ok;
+};
+
+/**
+ * Whether this quotation can be withdrawn.
+ *
+ * Accepted is deliberately its own refusal with its own sentence. Withdrawing
+ * something a client has already accepted is not a status change, it is a
+ * conversation - and a CRM that lets you do it silently will let you forget you
+ * did.
+ */
+export const withdrawQuoteRefusal = ({
+  quote,
+}: {
+  quote: { status?: string | null; documentNumber?: string | null } | null | undefined;
+}): GuardResult => {
+  if (!quote) return { error: 'Quote not found', status: 404 };
+
+  if (quote.status === 'ACCEPTED') {
+    return {
+      error: `${quote.documentNumber} has already been accepted. Cancelling an accepted quotation is a conversation with the client, not a status change.`,
+      status: 409,
+    };
+  }
+
+  if (quote.status !== 'ISSUED') {
+    return {
+      error: `Only an issued quotation can be withdrawn. This one is ${String(
+        quote.status,
+      ).toLowerCase()}.`,
+      status: 409,
+    };
+  }
+
+  return ok;
+};
+
 // --- a required id --------------------------------------------------------
 
 /** The dullest guard, and the one a typo in a front component lands on first. */

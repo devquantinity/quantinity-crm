@@ -199,14 +199,22 @@ exactly why it is cheap now and expensive later.
 
 ### Still inline, ranked by what goes wrong
 
-Thirteen routes still hold their refusals inline. In the order I would extract
-them:
+Thirteen routes held their refusals inline. The top three on the list are now
+done:
 
-1. `create-invoice-from-milestone` - creates money documents
-2. `revise-quote`, `withdraw-quote` - move a quotation between states a client has seen
-3. `public-quote-page`, `public-invoice-page` - client-facing, and the 500-on-a-stale-link bug lived here once already
-4. `save-quote-settings` - can corrupt the numbering for every future document
-5. the rest - messaging and catalogue, where a bad refusal is an annoyance, not a wrong number on an invoice
+- ~~`create-invoice-from-milestone`~~ - extracted and covered, including
+  "already fully billed", which is what stops a client being billed twice for
+  the same stage
+- ~~`revise-quote`, `withdraw-quote`~~ - extracted and covered, including the
+  refusal to silently withdraw a quotation a client has accepted
+
+Remaining, in the order I would do them:
+
+1. `public-quote-page`, `public-invoice-page` - client-facing, and the
+   500-on-a-stale-link bug lived here once already
+2. `save-quote-settings` - can corrupt the numbering for every future document
+3. the rest - messaging and catalogue, where a bad refusal is an annoyance
+   rather than a wrong number on an invoice
 
 
 ## 6. Docs - done
