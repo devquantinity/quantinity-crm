@@ -169,6 +169,57 @@ export const startProjectRefusal = ({
   return ok;
 };
 
+// --- billing a milestone --------------------------------------------------
+
+/**
+ * Whether this milestone can produce another invoice.
+ *
+ * "Already fully billed" is the one that earns its keep. Milestones are billed
+ * in parts, so the question is never "has this been invoiced" but "how much of
+ * it is left" - and getting that wrong bills a client twice for the same stage
+ * of the same project, which they notice and you do not.
+ */
+export const billMilestoneRefusal = ({
+  milestone,
+  milestoneMicros,
+  remainingMicros,
+  billedDescription,
+}: {
+  milestone:
+    | { name?: string | null; project?: { id?: string | null } | null }
+    | null
+    | undefined;
+  milestoneMicros: number;
+  remainingMicros: number;
+  billedDescription: string;
+}): GuardResult => {
+  if (!milestone) return { error: 'Milestone not found', status: 404 };
+
+  if (!milestone.project?.id) {
+    return {
+      error:
+        'This milestone is not attached to a project, so there is nothing to bill against.',
+      status: 409,
+    };
+  }
+
+  if (milestoneMicros <= 0) {
+    return {
+      error: `"${milestone.name}" has no amount on it, so there is nothing to bill.`,
+      status: 422,
+    };
+  }
+
+  if (remainingMicros <= 0) {
+    return {
+      error: `"${milestone.name}" is already fully billed (${billedDescription}). Void an existing invoice first if that is wrong.`,
+      status: 409,
+    };
+  }
+
+  return ok;
+};
+
 // --- a required id --------------------------------------------------------
 
 /** The dullest guard, and the one a typo in a front component lands on first. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  billMilestoneRefusal,
   issueInvoiceRefusal,
   issueQuoteRefusal,
   markPaidRefusal,
@@ -236,5 +237,95 @@ describe('missingId', () => {
     expect(missingId('   ', 'quoteId')?.error).toContain('quoteId is required');
     expect(missingId(undefined, 'invoiceId')?.error).toContain('invoiceId');
     expect(missingId(null, 'invoiceId')?.status).toBe(400);
+  });
+});
+
+describe('billing a milestone', () => {
+  const milestone = { name: 'Deposit', project: { id: 'p1' } };
+
+  it('bills a milestone with money still owing on it', () => {
+    expect(
+      billMilestoneRefusal({
+        milestone,
+        milestoneMicros: 6_000_000_000,
+        remainingMicros: 6_000_000_000,
+        billedDescription: 'MYR 0.00',
+      }),
+    ).toBeNull();
+  });
+
+  it('bills the remainder of a partly billed milestone', () => {
+    // Milestones are billed in parts. Partly billed is the normal case, not
+    // an error.
+    expect(
+      billMilestoneRefusal({
+        milestone,
+        milestoneMicros: 6_000_000_000,
+        remainingMicros: 1_000_000_000,
+        billedDescription: 'MYR 5,000.00',
+      }),
+    ).toBeNull();
+  });
+
+  it('will not bill the same stage twice', () => {
+    // The one that matters. Billing a client twice for the same stage of the
+    // same project is something they notice and you do not.
+    const refusal = billMilestoneRefusal({
+      milestone,
+      milestoneMicros: 6_000_000_000,
+      remainingMicros: 0,
+      billedDescription: 'MYR 6,000.00',
+    });
+
+    expect(refusal?.status).toBe(409);
+    expect(refusal?.error).toContain('already fully billed');
+    expect(refusal?.error).toContain('MYR 6,000.00');
+    expect(refusal?.error).toContain('Deposit');
+  });
+
+  it('will not bill past the milestone amount', () => {
+    expect(
+      billMilestoneRefusal({
+        milestone,
+        milestoneMicros: 6_000_000_000,
+        remainingMicros: -1,
+        billedDescription: 'MYR 6,500.00',
+      })?.status,
+    ).toBe(409);
+  });
+
+  it('will not bill a milestone with no amount', () => {
+    const refusal = billMilestoneRefusal({
+      milestone,
+      milestoneMicros: 0,
+      remainingMicros: 0,
+      billedDescription: 'MYR 0.00',
+    });
+
+    expect(refusal?.status).toBe(422);
+    expect(refusal?.error).toContain('no amount');
+  });
+
+  it('will not bill against a milestone with no project', () => {
+    const refusal = billMilestoneRefusal({
+      milestone: { name: 'Orphan', project: null },
+      milestoneMicros: 1_000_000,
+      remainingMicros: 1_000_000,
+      billedDescription: 'MYR 0.00',
+    });
+
+    expect(refusal?.status).toBe(409);
+    expect(refusal?.error).toContain('not attached to a project');
+  });
+
+  it('will not bill one that does not exist', () => {
+    expect(
+      billMilestoneRefusal({
+        milestone: null,
+        milestoneMicros: 1,
+        remainingMicros: 1,
+        billedDescription: '',
+      })?.status,
+    ).toBe(404);
   });
 });

@@ -2,6 +2,8 @@ import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 
+import { billMilestoneRefusal } from 'src/lib/route-guards';
+
 import { CREATE_INVOICE_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/invoice-identifiers';
 import { getQuoteSettings } from 'src/lib/quote-settings';
 import {
@@ -66,23 +68,18 @@ const run = async (payload: RoutePayload<CreateInvoiceBody>) => {
   const currencyCode = milestone.amount?.currencyCode ?? settings.currencyCode;
   const milestoneMicros = Number(milestone.amount?.amountMicros ?? 0);
 
-  if (milestoneMicros <= 0) {
-    return new Response(
-      { error: `"${milestone.name}" has no amount on it, so there is nothing to bill.` },
-      { status: 422 },
-    );
-  }
-
   const existing = (milestone.invoices?.edges ?? []).map((edge: any) => edge.node);
   const remaining = remainingMicros(milestoneMicros, existing);
 
-  if (remaining <= 0) {
-    return new Response(
-      {
-        error: `"${milestone.name}" is already fully billed (${formatMoney(billedMicros(existing), currencyCode)}). Void an existing invoice first if that is wrong.`,
-      },
-      { status: 409 },
-    );
+  const refusal = billMilestoneRefusal({
+    milestone,
+    milestoneMicros,
+    remainingMicros: remaining,
+    billedDescription: formatMoney(billedMicros(existing), currencyCode),
+  });
+
+  if (refusal) {
+    return new Response({ error: refusal.error }, { status: refusal.status });
   }
 
   // Two separate queries, not a nested one: project -> invoices and
