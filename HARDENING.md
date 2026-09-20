@@ -8,7 +8,7 @@ the bottom and is the most useful part of this file.
 | # | Item | State |
 |---|------|-------|
 | 1 | Backups | **done - PASS, restore verified** |
-| 2 | Run it properly | done, reboot unverified |
+| 2 | Run it properly | policy set; **Docker autostart is off** |
 | 3 | Double-submit | **done, verified in the app** |
 | 4 | Route tests | done |
 | 5 | Unit test audit | done |
@@ -116,9 +116,26 @@ the watcher exits, so the OOM never had to matter for using Quantinity.
   reports what it found, including whether Docker Desktop starts at login.
 - `start-quantinity.command` stays, for actually developing.
 
-**Not verified:** I cannot reboot the machine or reach Docker from here.
-"Survives a reboot" is reasoned, not observed. Run `make-durable.command`, then
-reboot and open localhost:2020 to confirm it.
+### Run (20 Sep): the restart policy alone would not have been enough
+
+```
+restart policy: no  ->  unless-stopped
+running: true
+"AutoStart": false
+```
+
+The container now restarts unless deliberately stopped. But **Docker Desktop
+does not start at login**, and a restart policy is only honoured by a running
+Docker daemon - so after a reboot nothing would have come back, and the policy
+would have looked correct the whole time.
+
+This is why the script reports what it found instead of printing "done". The
+setting is a checkbox: Docker Desktop > Settings > General > "Start Docker
+Desktop when you sign in".
+
+**Still not verified:** I cannot reboot the machine. Turn that setting on,
+reboot, and open localhost:2020 without touching anything. Until then this item
+is set up but unproven.
 
 ## 3. Double-submit
 
