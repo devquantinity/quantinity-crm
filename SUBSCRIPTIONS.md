@@ -18,9 +18,11 @@ Reasons, in order of how much they matter:
 3. A CRM that can bill its own owner is a strange object, and every customer's
    workspace would carry code that only concerns you.
 
-So: `quantinity.my` (signup, pricing, billing portal) is one service;
-`app.quantinity.my` (the CRM) is another. The billing service is the only thing
-allowed to create a workspace.
+So: `quantinity.com` (marketing, pricing, signup, billing portal) is one
+service; the workspaces at `<customer>.quantinity.com` are the CRM. The billing
+service is the only thing allowed to create a workspace - which also means it
+is the thing that owns the slug, and must enforce the reserved-name rules in
+DEPLOYMENT.md section 2b before it hands one out.
 
 ---
 

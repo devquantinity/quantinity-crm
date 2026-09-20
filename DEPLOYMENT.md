@@ -49,7 +49,7 @@ them until you have read these:
 | Thing | Why | Notes |
 |---|---|---|
 | A Linux server | Runs everything | See sizing below |
-| A domain | `app.quantinity.my` or similar | Customers will see it |
+| A domain | `quantinity.com` or similar | Customers will see it |
 | Object storage (S3 or compatible) | Uploaded files | Local disk loses files on container restart |
 | A Google Cloud project | "Continue with Google" sign-in | Free |
 | An SMTP sender | Invites, password resets | Postmark, Resend, SES - anything |
@@ -83,7 +83,7 @@ The variables that matter most:
 
 ```env
 # Where the app lives. Wrong value breaks OAuth and every emailed link.
-SERVER_URL=https://app.quantinity.my
+SERVER_URL=https://quantinity.com
 
 PG_DATABASE_URL=postgres://user:password@host:5432/default
 REDIS_URL=redis://host:6379
@@ -110,6 +110,75 @@ you already know it. HTTPS is not optional: the auth cookies require it.
 
 ---
 
+## 2b. Addresses: how a customer reaches their CRM
+
+**The engine routes workspaces by subdomain, not by path.**
+
+`crm.quantinity.com/company-name` is not something it does. The frontend is a
+single-page app served at the root, and the workspace is worked out from the
+hostname. Making a path prefix work means rewriting the frontend's routing and
+every place the backend builds a URL - the fork this project is trying not to
+own.
+
+So the shape is:
+
+```
+  acme.quantinity.com          <- Acme's workspace
+  bolehtech.quantinity.com     <- BolehTech's workspace
+  quantinity.com               <- marketing, pricing, signup
+```
+
+### Do not nest it under crm.
+
+`acme.crm.quantinity.com` is a **fourth-level** subdomain, and Cloudflare's free
+universal certificate covers `*.quantinity.com` only - one level. Nest the
+workspaces under `crm.` and every customer gets a certificate warning on their
+first visit.
+
+If you want `crm.` in the address anyway, the options are: Cloudflare Origin
+Certificates with Full (strict), Advanced Certificate Manager at about $10 a
+month, or Let's Encrypt with DNS-01 validation and the proxy switched off for
+that record. All of them are work you do not have to do if the workspaces sit
+one level up.
+
+`acme.quantinity.com` also reads better to the customer than
+`crm.quantinity.com/acme`, which looks like a folder on your server.
+
+### What DNS and TLS need
+
+- A **wildcard A record**: `*.quantinity.com` → the server
+- A **wildcard certificate** for `*.quantinity.com`. Caddy will get and renew
+  one over DNS-01 given an API token for the DNS provider; that is the least
+  work.
+- `crm.quantinity.com` can stay as the sign-in entry point that sends people to
+  their own workspace. Customers remember one address, and it still ends up on
+  the right subdomain.
+
+### Choose the slug rules now
+
+The slug is in the URL, it is public, and changing it later breaks every link
+and bookmark a customer has.
+
+- **Reserve the obvious names** before anyone can take them: `www`, `app`,
+  `api`, `admin`, `mail`, `crm`, `static`, `status`, `help`, `support`,
+  `billing`. A customer who registers `api` can make your own service
+  unreachable.
+- **Block names that impersonate.** Somebody will try to register a bank's name
+  or a competitor's. Keep a denylist and a manual review for anything close.
+- **Decide whether a slug can change.** If yes, keep the old one redirecting
+  forever. If no, say so on the signup form, before they type it.
+- Lowercase, letters, digits and hyphens. No leading or trailing hyphen, 3-30
+  characters.
+
+### Custom domains, later
+
+A workspace can be given its own domain - `crm.acmesdn.com` pointing at their
+workspace - which is a good paid upgrade. Be aware it currently insists on a
+`CLOUDFLARE_API_KEY` even if you intend to set the DNS by hand; there is an open
+issue and a PR for it. Do not sell it until you have made it work once.
+
+---
+
 ## 3. Google sign-in
 
 In Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID
@@ -121,8 +190,8 @@ Then:
 AUTH_GOOGLE_ENABLED=true
 AUTH_GOOGLE_CLIENT_ID=<from Google>
 AUTH_GOOGLE_CLIENT_SECRET=<from Google>
-AUTH_GOOGLE_CALLBACK_URL=https://app.quantinity.my/auth/google/redirect
-AUTH_GOOGLE_APIS_CALLBACK_URL=https://app.quantinity.my/auth/google-apis/get-access-token
+AUTH_GOOGLE_CALLBACK_URL=https://quantinity.com/auth/google/redirect
+AUTH_GOOGLE_APIS_CALLBACK_URL=https://quantinity.com/auth/google-apis/get-access-token
 ```
 
 **The two callback URLs must be pasted verbatim into Google's "Authorised
@@ -217,6 +286,8 @@ Never upgrade on a Friday.
 | Blank page, spinner forever | `SERVER_URL` wrong, or TLS not terminating |
 | Login fails after enabling multi-workspace | Section 2 - test this before customers exist |
 | `redirect_uri_mismatch` | Section 3 - copy the URI from Google's error page |
+| Certificate warning on a customer's subdomain | Section 2b - the wildcard does not cover a fourth level |
+| A new workspace 404s | Wildcard DNS record missing, or the slug was reserved |
 | Uploads vanish after a restart | Still on local storage; set `STORAGE_TYPE=S_3` |
 | Background jobs never run | Worker container is not running |
 | Quotation numbers jumped | Normal for a withdrawn quotation; the number stays spent |
@@ -253,6 +324,6 @@ Needs a frontend fork, and the AGPL obligation in section 0 comes with it:
 
 - The login page, the browser tab title, the favicon, the sidebar logo
 
-A fair reading: customers who sign in at `app.quantinity.my`, get documents
+A fair reading: customers who sign in at `quantinity.com`, get documents
 branded as their own, and are supported by you will not care much what the
 sidebar logo says. Revisit it when there is revenue to pay for the fork.
