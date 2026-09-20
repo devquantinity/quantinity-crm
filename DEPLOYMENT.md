@@ -120,39 +120,73 @@ hostname. Making a path prefix work means rewriting the frontend's routing and
 every place the backend builds a URL - the fork this project is trying not to
 own.
 
-So the shape is:
+So a customer's CRM lives at a subdomain of whatever you make the default
+domain. Two sensible layouts are below; pick one before you buy a certificate.
+
+### The sign-in entry point is already built
+
+You do not have to build a "find my workspace" page. The engine's **default
+domain** is a sign-in screen: the customer signs in there with a password,
+Google or SSO, picks their workspace if they belong to more than one, and gets
+sent to its subdomain. Deep links survive the round trip, so a link into a
+specific record still lands on that record after sign-in.
+
+So the customer only ever has to remember one address. Which one it is depends
+on the layout you pick below - the default domain **is** the sign-in page.
+
+### Two layouts, both fine
+
+Workspace subdomains are built by prefixing the default domain. So the default
+domain decides everything else.
+
+**A - the app owns the apex**
 
 ```
+  quantinity.com               <- default domain: sign-in, workspace picker
   acme.quantinity.com          <- Acme's workspace
-  bolehtech.quantinity.com     <- BolehTech's workspace
+  www.quantinity.com           <- marketing, pricing, signup
+```
+
+Third-level subdomains, so Cloudflare's free proxied certificate
+(`*.quantinity.com`) covers them and you can leave the orange cloud on. The
+cost is that marketing cannot have the apex - it lives on `www.` or on a
+separate domain.
+
+**B - everything under crm. (recommended if you want the marketing site on the
+apex)**
+
+```
+  crm.quantinity.com           <- default domain: sign-in, workspace picker
+  acme.crm.quantinity.com      <- Acme's workspace
   quantinity.com               <- marketing, pricing, signup
 ```
 
-### Do not nest it under crm.
+Cleaner separation: the marketing site keeps the main domain, and `crm.` is
+obviously the product. The workspaces are fourth-level subdomains, which
+Cloudflare's **free proxied** certificate does not cover - `*.quantinity.com`
+is one level only.
 
-`acme.crm.quantinity.com` is a **fourth-level** subdomain, and Cloudflare's free
-universal certificate covers `*.quantinity.com` only - one level. Nest the
-workspaces under `crm.` and every customer gets a certificate warning on their
-first visit.
+That is a Cloudflare-proxy limit, not a limit on nesting. It costs nothing to
+work around:
 
-If you want `crm.` in the address anyway, the options are: Cloudflare Origin
-Certificates with Full (strict), Advanced Certificate Manager at about $10 a
-month, or Let's Encrypt with DNS-01 validation and the proxy switched off for
-that record. All of them are work you do not have to do if the workspaces sit
-one level up.
+- Let Caddy get a **Let's Encrypt wildcard for `*.crm.quantinity.com`** over
+  DNS-01, with an API token for your DNS provider. Free, renews itself.
+- Keep those records **DNS-only in Cloudflare** (grey cloud, not orange), so
+  the browser gets Caddy's certificate rather than Cloudflare's edge one.
 
-`acme.quantinity.com` also reads better to the customer than
-`crm.quantinity.com/acme`, which looks like a folder on your server.
+Only if you insist on proxying them through Cloudflare do you need Advanced
+Certificate Manager at about $10 a month.
 
 ### What DNS and TLS need
 
-- A **wildcard A record**: `*.quantinity.com` → the server
-- A **wildcard certificate** for `*.quantinity.com`. Caddy will get and renew
-  one over DNS-01 given an API token for the DNS provider; that is the least
-  work.
-- `crm.quantinity.com` can stay as the sign-in entry point that sends people to
-  their own workspace. Customers remember one address, and it still ends up on
-  the right subdomain.
+For layout A: a wildcard A record `*.quantinity.com` and a wildcard certificate
+for the same.
+
+For layout B: a wildcard A record `*.crm.quantinity.com` and a Let's Encrypt
+wildcard for the same, over DNS-01, DNS-only in Cloudflare.
+
+Either way it is one record and one certificate, set up once. Nothing to touch
+when a customer signs up.
 
 ### Choose the slug rules now
 
@@ -286,7 +320,7 @@ Never upgrade on a Friday.
 | Blank page, spinner forever | `SERVER_URL` wrong, or TLS not terminating |
 | Login fails after enabling multi-workspace | Section 2 - test this before customers exist |
 | `redirect_uri_mismatch` | Section 3 - copy the URI from Google's error page |
-| Certificate warning on a customer's subdomain | Section 2b - the wildcard does not cover a fourth level |
+| Certificate warning on a customer's subdomain | Section 2b - Cloudflare's free proxied cert stops at one level; go DNS-only |
 | A new workspace 404s | Wildcard DNS record missing, or the slug was reserved |
 | Uploads vanish after a restart | Still on local storage; set `STORAGE_TYPE=S_3` |
 | Background jobs never run | Worker container is not running |
