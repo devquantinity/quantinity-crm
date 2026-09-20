@@ -1,9 +1,14 @@
 name: CD
 
+# Deploys the app into a running server. The scaffolded trigger was every push
+# to main, pointed at http://localhost:2020 - which does not exist on a GitHub
+# runner, so every push went red for a deploy nobody asked for. It now runs
+# only when you ask: the Actions tab, or a `deploy` label on a pull request.
+#
+# Point TWENTY_DEPLOY_URL at a real server and put its credentials in repository
+# secrets before turning the push trigger back on.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
   pull_request:
     types: [labeled]
 
@@ -20,7 +25,7 @@ concurrency:
 jobs:
   deploy-and-install:
     if: >-
-      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.label.name == 'deploy')
     runs-on: ubuntu-latest
     steps:
