@@ -7,14 +7,14 @@ the bottom and is the most useful part of this file.
 
 | # | Item | State |
 |---|------|-------|
-| 1 | Backups | **Blocked** - script ready, needs one run on the Mac |
+| 1 | Backups | dump proven real; **restore still unverified** |
 | 2 | Run it properly | done, reboot unverified |
 | 3 | Double-submit | **done, verified in the app** |
 | 4 | Route tests | done |
 | 5 | Unit test audit | done |
 | 6 | Docs | done |
 
-## 1. Backups - blocked
+## 1. Backups - a real dump, an unproven restore
 
 `backup-rehearsal.command` dumps Twenty's database, restores it into a
 throwaway container, and prints row counts before and after so they can be
@@ -22,8 +22,38 @@ compared. It has not been run in its current form yet.
 
 It cannot be run from here: the shell I get on the Mac is an isolated VM with
 only the connected folders mounted. No Docker, no `psql`, and no route to
-`localhost:2020`. So a human double-click is the only way this gets verified,
-and until it is, **there is no working backup.**
+`localhost:2020`. So a human double-click is the only way this gets verified.
+
+### Run 2 (20 Sep): the dump is real, the check was broken
+
+It found Twenty correctly this time - `twenty-app-dev`, `user=twenty db=default`,
+one workspace schema - and wrote a 1.3 MB dump. Reading that file directly
+confirms it holds the actual records: 6 quotes, 3 invoices, 2 conversations, and
+the document numbers Q-0001 through Q-0052 and INV-0001 through INV-0004, across
+113 `COPY` blocks.
+
+But both row-count sections printed **nothing**, and the whole run finished in
+five seconds - too fast for a Postgres container to boot and take a restore.
+
+Two faults, and the first is the more dangerous:
+
+1. **The count query filtered on guessed table names.** Twenty prefixes custom
+   objects with an underscore: `_quote`, `_invoice`, `_chatMessage`. The query
+   looked for `quote`, `invoice`, matched nothing, and printed nothing - which
+   is indistinguishable from a clean pass. A check that cannot fail loudly is
+   not a check. It now lists every non-empty table in the workspace schema and
+   guesses at no names.
+2. **The restore was silent.** `docker run` and the restore both sent output to
+   `/dev/null`, so a scratch container that never started looked the same as one
+   that restored perfectly. It now waits for `pg_isready`, fails loudly if the
+   container does not come up, prints any restore errors, and matches the
+   Postgres major version against the live server.
+
+It ends with a **VERDICT** line now - PASS, FAIL with a diff, or INCONCLUSIVE -
+rather than leaving two lists to be eyeballed.
+
+**Still true: no restore has been performed.** A dump that has not been restored
+is a file, not a backup.
 
 ### The first version dumped the wrong database
 

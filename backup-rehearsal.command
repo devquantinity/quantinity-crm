@@ -52,14 +52,24 @@ esac
 [ "$FOUND" -lt 1 ] && { echo "FAIL: no workspace schemas - this is not Twenty's data. Nothing was dumped."; read "?Press return."; exit 1; }
 
 echo "--- what is in there ---"
-docker exec -e PGPASSWORD="$PGPASS" "$APP" psql -U "$PGUSER" -h "$PGHOST" -p "$PGPORT" -d "$PGDB" -Atc "
-  select n.nspname||'.'||c.relname||' rows='||
-    (xpath('/row/c/text()', query_to_xml('select count(*) as c from '||
-      quote_ident(n.nspname)||'.'||quote_ident(c.relname), false, true, '')))[1]::text::int
-  from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where c.relkind='r' and n.nspname like 'workspace%'
-    and c.relname in ('quote','quoteItem','invoice','project','milestone','product','conversation','chatMessage')
-  order by 1;"
+count_rows() {
+  # $1 = container, $2 = password. Lists every non-empty table in the workspace
+  # schema with its row count. Not a fixed list of names - an earlier version
+  # guessed at them, found none, and printed nothing at all, which looked
+  # exactly like a successful check.
+  docker exec -e PGPASSWORD="$2" "$1" psql -U "$PGUSER" -d "$PGDB" -Atc "
+    select c.relname||' = '||
+      (xpath('/row/c/text()', query_to_xml(
+        format('select count(*) as c from %I.%I', n.nspname, c.relname),
+        false, true, '')))[1]::text::int
+    from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where c.relkind='r' and n.nspname like 'workspace%'
+    order by 1;" 2>&1 | grep -v ' = 0$' | sort
+}
+
+count_rows "$APP" "$PGPASS" > "$HERE/.rows-before.txt"
+echo "tables with rows, before: $(wc -l < "$HERE/.rows-before.txt" | tr -d ' ')"
+head -20 "$HERE/.rows-before.txt"
 
 echo "--- dumping ---"
 DUMP="$OUT/quantinity-$STAMP.sql.gz"
@@ -69,22 +79,59 @@ echo "wrote $DUMP ($(du -h "$DUMP" | cut -f1))"
 
 echo "--- restoring into a THROWAWAY container (live db untouched) ---"
 SCRATCH="quantinity-restore-test-$$"
-docker run -d --name "$SCRATCH" -e POSTGRES_PASSWORD=rehearsal -e POSTGRES_USER="$PGUSER" \
-  -e POSTGRES_DB="$PGDB" postgres:16-alpine >/dev/null
-for i in $(seq 1 45); do docker exec "$SCRATCH" pg_isready -U "$PGUSER" >/dev/null 2>&1 && break; sleep 2; done
-gunzip -c "$DUMP" | docker exec -i -e PGPASSWORD=rehearsal "$SCRATCH" psql -U "$PGUSER" -d "$PGDB" -v ON_ERROR_STOP=0 >/dev/null 2>&1
+PGVER=$(docker exec -e PGPASSWORD="$PGPASS" "$APP" psql -U "$PGUSER" -h "$PGHOST" -p "$PGPORT" -d "$PGDB" -Atc "show server_version_num;" 2>/dev/null)
+IMG="postgres:16-alpine"
+[ -n "$PGVER" ] && [ "$PGVER" -ge 170000 ] 2>/dev/null && IMG="postgres:17-alpine"
+echo "scratch image: $IMG (live server_version_num=$PGVER)"
 
+docker run -d --name "$SCRATCH" -e POSTGRES_PASSWORD=rehearsal -e POSTGRES_USER="$PGUSER" \
+  -e POSTGRES_DB="$PGDB" "$IMG" || { echo "FAIL: could not start the scratch container."; read "?Press return."; exit 1; }
+
+echo -n "waiting for it to accept connections"
+READY=no
+for i in $(seq 1 60); do
+  if docker exec "$SCRATCH" pg_isready -U "$PGUSER" >/dev/null 2>&1; then READY=yes; break; fi
+  echo -n "."
+  sleep 2
+done
+echo ""
+if [ "$READY" != "yes" ]; then
+  echo "FAIL: the scratch container never came up, so nothing was restored and nothing was verified."
+  docker logs --tail 20 "$SCRATCH"
+  docker rm -f "$SCRATCH" >/dev/null 2>&1
+  read "?Press return."; exit 1
+fi
+
+echo "restoring (errors below, if any)..."
+gunzip -c "$DUMP" | docker exec -i -e PGPASSWORD=rehearsal "$SCRATCH" \
+  psql -U "$PGUSER" -d "$PGDB" -v ON_ERROR_STOP=0 2>&1 \
+  | grep -iE '^ERROR|^FATAL' | sort | uniq -c | sort -rn | head -10
+echo "(role/ownership errors are expected and harmless - the scratch container has different roles)"
+
+echo ""
 echo "--- did it come back? ---"
-docker exec -e PGPASSWORD=rehearsal "$SCRATCH" psql -U "$PGUSER" -d "$PGDB" -Atc "
-  select n.nspname||'.'||c.relname||' rows='||
-    (xpath('/row/c/text()', query_to_xml('select count(*) as c from '||
-      quote_ident(n.nspname)||'.'||quote_ident(c.relname), false, true, '')))[1]::text::int
-  from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where c.relkind='r' and n.nspname like 'workspace%'
-    and c.relname in ('quote','quoteItem','invoice','project','milestone','product','conversation','chatMessage')
-  order by 1;"
+count_rows "$SCRATCH" rehearsal > "$HERE/.rows-after.txt"
+echo "tables with rows, after:  $(wc -l < "$HERE/.rows-after.txt" | tr -d ' ')"
+head -20 "$HERE/.rows-after.txt"
 
 docker rm -f "$SCRATCH" >/dev/null 2>&1
-echo "=== done $(date) ==="
-echo "Compare the two row counts above. They should match."
+
+echo ""
+echo "=================== VERDICT ==================="
+if [ ! -s "$HERE/.rows-before.txt" ]; then
+  echo "INCONCLUSIVE: the live database reported no tables with rows."
+  echo "Nothing was compared. Do not rely on this backup."
+elif diff -q "$HERE/.rows-before.txt" "$HERE/.rows-after.txt" >/dev/null 2>&1; then
+  echo "PASS - every table came back with exactly the same number of rows."
+  echo "This backup restores. $(wc -l < "$HERE/.rows-before.txt" | tr -d ' ') tables checked."
+else
+  echo "FAIL - the restore does not match the original. Differences:"
+  diff "$HERE/.rows-before.txt" "$HERE/.rows-after.txt" | head -25
+  echo ""
+  echo "Do not rely on this backup until this matches."
+fi
+echo "==============================================="
+echo ""
+echo "Backup: $DUMP"
+echo "Log:    $LOG"
 read "?Press return to close."

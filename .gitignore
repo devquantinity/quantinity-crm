@@ -52,3 +52,5 @@ backup-rehearsal.log
 quantinity-apply.log
 make-durable.log
 cli-help.txt
+.rows-before.txt
+.rows-after.txt
