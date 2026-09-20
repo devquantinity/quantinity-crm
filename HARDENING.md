@@ -7,14 +7,14 @@ the bottom and is the most useful part of this file.
 
 | # | Item | State |
 |---|------|-------|
-| 1 | Backups | dump proven real; **restore still unverified** |
+| 1 | Backups | **done - PASS, restore verified** |
 | 2 | Run it properly | done, reboot unverified |
 | 3 | Double-submit | **done, verified in the app** |
 | 4 | Route tests | done |
 | 5 | Unit test audit | done |
 | 6 | Docs | done |
 
-## 1. Backups - a real dump, an unproven restore
+## 1. Backups - done, and proven
 
 `backup-rehearsal.command` dumps Twenty's database, restores it into a
 throwaway container, and prints row counts before and after so they can be
@@ -52,8 +52,36 @@ Two faults, and the first is the more dangerous:
 It ends with a **VERDICT** line now - PASS, FAIL with a diff, or INCONCLUSIVE -
 rather than leaving two lists to be eyeballed.
 
-**Still true: no restore has been performed.** A dump that has not been restored
-is a file, not a backup.
+### Run 3 (20 Sep): PASS
+
+```
+=================== VERDICT ===================
+PASS - every table came back with exactly the same number of rows.
+This backup restores. 34 tables checked.
+===============================================
+```
+
+34 tables, identical counts on both sides, restored into a Postgres 18 container
+matching the live server. `_quote = 6`, `_invoice = 3`, `_quoteItem = 15`,
+`_conversation = 2`, `_milestone = 5` - the records, not just the schema.
+
+Run 2 had failed on two more faults, both mine. `count_rows` dropped `-h` and
+`-p`, so psql went to a unix socket that the stock postgres image has and
+Twenty's does not: the scratch side found one, the live side did not, and the
+verdict diffed an error message against real numbers. And the scratch image was
+picked by a `>= 170000` threshold, which put an 18 dump into a 17 container -
+it worked, which was luck.
+
+It took three runs to get a backup, and every failure was in the checking rather
+than the backing up. That is the part worth remembering: the dump was fine on
+run 2, and the script said FAIL.
+
+**This is now a real backup.** It rotates at 30 files (~40MB).
+
+### What it still does not cover
+
+Everything is on one laptop - see the list at the end of this file. Restoring
+over the live database is deliberately manual; `RUNBOOK.md` has the steps.
 
 ### The first version dumped the wrong database
 

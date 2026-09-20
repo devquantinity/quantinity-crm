@@ -144,6 +144,17 @@ else
   echo "Do not rely on this backup until this matches."
 fi
 echo "==============================================="
+# Keep the last 30. At ~1.3MB each that is under 40MB, and a folder that only
+# ever grows is a folder someone eventually clears out in a hurry, on the day
+# they most need what was in it.
+KEPT=$(ls -1t "$OUT"/quantinity-*.sql.gz 2>/dev/null | wc -l | tr -d ' ')
+if [ "$KEPT" -gt 30 ]; then
+  ls -1t "$OUT"/quantinity-*.sql.gz | tail -n +31 | while read -r old; do
+    rm -f "$old" && echo "removed old backup: $(basename "$old")"
+  done
+fi
+echo "backups kept: $(ls -1 "$OUT"/quantinity-*.sql.gz 2>/dev/null | wc -l | tr -d ' ')"
+
 echo ""
 echo "Backup: $DUMP"
 echo "Log:    $LOG"
