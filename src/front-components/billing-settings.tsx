@@ -331,7 +331,7 @@ const BillingSettings = () => {
             <div style={{ flex: '1 1 140px' }}>
               <Field
                 label="Next number"
-                hint="Can be moved forward to match an existing series, never backward."
+                hint="Moves forward freely. Moves back only onto a number nothing is using yet."
               >
                 <input
                   id="quote-sequence"
@@ -397,7 +397,7 @@ const BillingSettings = () => {
             <div style={{ flex: '1 1 140px' }}>
               <Field
                 label="Next number"
-                hint="Can be moved forward to match an existing series, never backward."
+                hint="Moves forward freely. Moves back only onto a number nothing is using yet."
               >
                 <input
                   id="invoice-sequence"

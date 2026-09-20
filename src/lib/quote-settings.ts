@@ -79,8 +79,25 @@ export const getQuoteSettings = async (): Promise<QuoteSettings> => {
   };
 };
 
+/**
+ * Keep only the keys that are actually settings.
+ *
+ * The save route answers with `{ ok, ...settings, nextDocumentNumberPreview }`,
+ * and the settings screen holds on to what it was given. Post that back and the
+ * answer's own fields get stored alongside the real ones - the workspace record
+ * had picked up an `ok` and a stale `nextDocumentNumberPreview` before this
+ * existed. Harmless, but it is the kind of harmless that compounds.
+ */
+const onlySettings = (settings: QuoteSettings): QuoteSettings =>
+  Object.fromEntries(
+    Object.keys(DEFAULT_QUOTE_SETTINGS).map((key) => [
+      key,
+      settings[key as keyof QuoteSettings],
+    ]),
+  ) as QuoteSettings;
+
 export const saveQuoteSettings = async (settings: QuoteSettings) => {
-  await kv.set(SETTINGS_KEY, settings, { scope: 'WORKSPACE' });
+  await kv.set(SETTINGS_KEY, onlySettings(settings), { scope: 'WORKSPACE' });
 };
 
 /**

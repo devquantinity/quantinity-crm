@@ -7,6 +7,7 @@ import {
   markPaidRefusal,
   missingId,
   reviseQuoteRefusal,
+  sequenceRewindRefusal,
   startProjectRefusal,
   withdrawQuoteRefusal,
 } from 'src/lib/route-guards';
@@ -401,5 +402,58 @@ describe('withdrawing a quotation', () => {
 
   it('will not withdraw one that does not exist', () => {
     expect(withdrawQuoteRefusal({ quote: null })?.status).toBe(404);
+  });
+});
+
+describe('rewinding a document sequence', () => {
+  const rewind = (requested: number, current: number, highestInUse: number) =>
+    sequenceRewindRefusal({ label: 'quotation', requested, current, highestInUse });
+
+  it('lets the counter move forward', () => {
+    expect(rewind(200, 53, 52)).toBeNull();
+  });
+
+  it('lets it stay where it is', () => {
+    expect(rewind(53, 53, 52)).toBeNull();
+  });
+
+  it('lets it go back to 1 once nothing is numbered', () => {
+    expect(rewind(1, 53, 0)).toBeNull();
+  });
+
+  it('lets it go back to just past the highest number in use', () => {
+    expect(rewind(53, 60, 52)).toBeNull();
+  });
+
+  it('refuses the number the highest document already carries', () => {
+    const refusal = rewind(52, 60, 52);
+
+    expect(refusal?.status).toBe(422);
+    expect(refusal?.error).toContain('52 is already in use');
+    expect(refusal?.error).toContain('53 or higher');
+  });
+
+  it('refuses a rewind under a live series', () => {
+    expect(rewind(1, 53, 52)?.status).toBe(422);
+  });
+
+  it('refuses zero and below', () => {
+    expect(rewind(0, 53, 0)?.status).toBe(422);
+    expect(rewind(-4, 53, 0)?.error).toContain('1 or more');
+  });
+
+  it('refuses a number that is not a number', () => {
+    expect(rewind(Number.NaN, 53, 0)?.status).toBe(422);
+  });
+
+  it('names the series it is talking about', () => {
+    const refusal = sequenceRewindRefusal({
+      label: 'invoice',
+      requested: 1,
+      current: 5,
+      highestInUse: 4,
+    });
+
+    expect(refusal?.error).toContain('invoice');
   });
 });

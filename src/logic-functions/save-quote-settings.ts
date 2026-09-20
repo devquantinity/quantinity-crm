@@ -1,5 +1,6 @@
 import { defineLogicFunction } from 'twenty-sdk/define';
 import { Response, type RoutePayload } from 'twenty-sdk/logic-function';
+import { CoreApiClient } from 'twenty-client-sdk/core';
 
 import { SAVE_QUOTE_SETTINGS_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER } from 'src/constants/quote-identifiers';
 import {
@@ -7,17 +8,23 @@ import {
   saveQuoteSettings,
   type QuoteSettings,
 } from 'src/lib/quote-settings';
-import { formatDocumentNumber } from 'src/lib/quote-math';
+import {
+  formatDocumentNumber,
+  highestSequenceInUse,
+} from 'src/lib/quote-math';
+import { sequenceRewindRefusal } from 'src/lib/route-guards';
 
 /**
  * Save the billing settings.
  *
  * Two things this deliberately will NOT do:
  *
- *   - move the sequence backwards. Reusing a document number means two
- *     different documents claiming to be Q-0007, which is the sort of thing an
- *     accountant finds months later. Forward is allowed (skipping numbers to
- *     match an existing paper series is a real need); backward is refused.
+ *   - move the sequence onto a number a document already carries. Two
+ *     documents claiming to be Q-0007 is the sort of thing an accountant finds
+ *     months later. Forward is always allowed (skipping numbers to match an
+ *     existing paper series is a real need); backward is allowed only over
+ *     ground nothing stands on, which is what makes starting the real series at
+ *     Q-0001 possible once the test documents are gone.
  *   - accept a nonsense tax rate. Everything else is the user's business.
  *
  * Settings are read at issue time and frozen onto the quote, so editing them
@@ -26,6 +33,89 @@ import { formatDocumentNumber } from 'src/lib/quote-math';
 
 const clampPadding = (value: unknown) =>
   Math.min(Math.max(Math.round(Number(value) || 4), 1), 10);
+
+/**
+ * The highest number any document in a series currently carries.
+ *
+ * Asked only when someone tries to move a counter backwards, so the cost lands
+ * on the once-in-the-life-of-a-workspace action rather than on every save.
+ *
+ * Two queries, because a document in the trash still owns its number - undelete
+ * is one click - and Twenty leaves soft-deleted records out unless the filter
+ * asks for them. Ordering is by the number as text, which is exactly right
+ * while the padding is fixed; the page of 200 is the margin for a workspace
+ * whose padding changed mid-series.
+ */
+const LOOKUP_PAGE = 200;
+
+type NumberedEdge = { node?: { documentNumber?: string | null } | null } | null;
+
+const numbersFrom = async (
+  fetchPage: (trashed: boolean) => Promise<NumberedEdge[]>,
+) => {
+  const numbers: (string | null | undefined)[] = [];
+
+  for (const edge of await fetchPage(false)) {
+    numbers.push(edge?.node?.documentNumber);
+  }
+
+  // The trash is the half of this that matters and the half that might not
+  // answer: if the deletedAt filter is ever refused, a settings save should
+  // not 500 over it. Fall back to what the live pass knows and say so in the
+  // log - the worst case is the counter allowing a number a trashed document
+  // still holds, which only bites if that document is ever restored.
+  try {
+    for (const edge of await fetchPage(true)) {
+      numbers.push(edge?.node?.documentNumber);
+    }
+  } catch (error) {
+    console.warn('could not read the trash for document numbers', error);
+  }
+
+  return highestSequenceInUse(numbers);
+};
+
+const highestQuoteNumberInUse = () =>
+  numbersFrom(async (trashed) => {
+    const client = new CoreApiClient();
+
+    const { quotes } = await client.query({
+      quotes: {
+        __args: {
+          filter: {
+            documentNumber: { is: 'NOT_NULL' },
+            ...(trashed ? { deletedAt: { is: 'NOT_NULL' } } : {}),
+          },
+          orderBy: [{ documentNumber: 'DescNullsLast' }],
+          first: LOOKUP_PAGE,
+        },
+        edges: { node: { documentNumber: true } },
+      },
+    });
+
+    return (quotes?.edges ?? []) as unknown as NumberedEdge[];
+  });
+
+const highestInvoiceNumberInUse = () =>
+  numbersFrom(async (trashed) => {
+    const client = new CoreApiClient();
+
+    const { invoices } = await client.query({
+      invoices: {
+        __args: {
+          filter: {
+            documentNumber: { is: 'NOT_NULL' },
+            ...(trashed ? { deletedAt: { is: 'NOT_NULL' } } : {}),
+          },
+          orderBy: [{ documentNumber: 'DescNullsLast' }],
+          first: LOOKUP_PAGE,
+        },
+        edges: { node: { documentNumber: true } },
+      },
+    });
+
+    return (invoices?.edges ?? []) as unknown as NumberedEdge[];
+  });
 
 const handler = async (payload: RoutePayload<Partial<QuoteSettings>>) => {
   const incoming = payload.body ?? {};
@@ -44,12 +134,20 @@ const handler = async (payload: RoutePayload<Partial<QuoteSettings>>) => {
     Number(incoming.nextQuoteSequence ?? current.nextQuoteSequence),
   );
 
-  if (requestedSequence < current.nextQuoteSequence) {
+  const quoteRefusal = sequenceRewindRefusal({
+    label: 'quotation',
+    requested: requestedSequence,
+    current: current.nextQuoteSequence,
+    highestInUse:
+      requestedSequence < current.nextQuoteSequence
+        ? await highestQuoteNumberInUse()
+        : 0,
+  });
+
+  if (quoteRefusal) {
     return new Response(
-      {
-        error: `The next quotation number cannot go backwards. It is already at ${current.nextQuoteSequence} - moving it back would let two documents share a number.`,
-      },
-      { status: 422 },
+      { error: quoteRefusal.error },
+      { status: quoteRefusal.status },
     );
   }
 
@@ -57,12 +155,20 @@ const handler = async (payload: RoutePayload<Partial<QuoteSettings>>) => {
     Number(incoming.nextInvoiceSequence ?? current.nextInvoiceSequence),
   );
 
-  if (requestedInvoiceSequence < current.nextInvoiceSequence) {
+  const invoiceRefusal = sequenceRewindRefusal({
+    label: 'invoice',
+    requested: requestedInvoiceSequence,
+    current: current.nextInvoiceSequence,
+    highestInUse:
+      requestedInvoiceSequence < current.nextInvoiceSequence
+        ? await highestInvoiceNumberInUse()
+        : 0,
+  });
+
+  if (invoiceRefusal) {
     return new Response(
-      {
-        error: `The next invoice number cannot go backwards. It is already at ${current.nextInvoiceSequence} - moving it back would let two invoices share a number.`,
-      },
-      { status: 422 },
+      { error: invoiceRefusal.error },
+      { status: invoiceRefusal.status },
     );
   }
 
@@ -129,7 +235,7 @@ export default defineLogicFunction({
   universalIdentifier: SAVE_QUOTE_SETTINGS_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER,
   name: 'save-quote-settings',
   description: 'Saves the billing settings used when a quote is issued',
-  timeoutSeconds: 5,
+  timeoutSeconds: 10,
   handler,
   httpRouteTriggerSettings: {
     path: '/quote-settings',

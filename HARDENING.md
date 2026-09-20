@@ -310,7 +310,8 @@ Remaining, in the order I would do them:
 
 1. `public-quote-page`, `public-invoice-page` - client-facing, and the
    500-on-a-stale-link bug lived here once already
-2. `save-quote-settings` - can corrupt the numbering for every future document
+2. ~~`save-quote-settings`~~ - the sequence guard is extracted and covered; the
+   rest of the route (tax rate, padding, base URL) is still inline
 3. the rest - messaging and catalogue, where a bad refusal is an annoyance
    rather than a wrong number on an invoice
 
@@ -380,12 +381,19 @@ Closing it needs a conditional update the API does not offer. See section 3.
 Ticking "tax registered" makes invoices refuse to issue (501) rather than
 underbill. That is the safe behaviour and it is not a feature. Your decision.
 
-### 9. Test records are mixed in with real ones
+### 9. Test records, and a whole demo workspace under them
 
-Quotes Q-0001, Q-0050, Q-0051, Q-0052 and a template copy; invoices INV-0002
-to INV-0004; three projects with milestones; two products; two conversations
-(one now attached to a real contact, Kathy Mcclain, by a test). Clear these
-before real client data joins them. I cannot delete records.
+Mine: quotes Q-0001, Q-0050, Q-0051, Q-0052 and a template copy; invoices
+INV-0002 to INV-0004; three projects with milestones; two products; two
+conversations. RUNBOOK.md has the order to delete them in and what comes away
+with what. I cannot delete records.
+
+Underneath those sits Twenty's demo dataset, seeded on 14 September: 1,200
+people, 599 companies, 150 deals, 1,800 notes, 1,800 tasks, 800 calendar
+events, 400 attachments, 1,005 workspace members. Every company you recognise
+in there - Google, Microsoft, Meta - is theirs, not yours. Roughly 18,000
+records, which is a scripted job through the API rather than a hand cleanup,
+and it needs care around the workspace members since one of them is you.
 
 ### 10. Tests were verified by my runner, not by vitest
 

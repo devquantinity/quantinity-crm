@@ -102,6 +102,30 @@ export const formatDocumentNumber = (
   sequence: number,
 ) => `${prefix}${String(sequence).padStart(padding, '0')}`;
 
+/**
+ * The inverse, near enough: the sequence a document number carries.
+ *
+ * Deliberately prefix-blind. It reads the trailing run of digits, so it still
+ * reads Q-0051 correctly after the prefix or the padding has been changed,
+ * which formatting the number again would not. Anything with no trailing digits
+ * is not a number this app assigned, and counts as nothing.
+ */
+export const sequenceOfDocumentNumber = (documentNumber: unknown) => {
+  const digits = /(\d+)\s*$/.exec(String(documentNumber ?? '').trim());
+
+  return digits ? Number(digits[1]) : 0;
+};
+
+/** The highest sequence any of these documents has claimed. 0 when none have. */
+export const highestSequenceInUse = (
+  documentNumbers: readonly (string | null | undefined)[],
+) =>
+  documentNumbers.reduce<number>(
+    (highest, documentNumber) =>
+      Math.max(highest, sequenceOfDocumentNumber(documentNumber)),
+    0,
+  );
+
 export const formatMoney = (micros: number, currencyCode: string) =>
   `${currencyCode} ${fromMicros(micros).toLocaleString('en-MY', {
     minimumFractionDigits: 2,

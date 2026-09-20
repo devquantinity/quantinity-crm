@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateTotals,
   findCurrencyMismatches,
+  highestSequenceInUse,
   lineLabel,
   milestonesFromQuoteLines,
+  sequenceOfDocumentNumber,
   toMicros,
 } from 'src/lib/quote-math';
 
@@ -147,5 +149,41 @@ describe('milestonesFromQuoteLines', () => {
 
   it('returns nothing for a quote with no lines', () => {
     expect(milestonesFromQuoteLines([], 'MYR')).toEqual([]);
+  });
+});
+
+describe('reading a sequence back out of a document number', () => {
+  it('reads the padded number', () => {
+    expect(sequenceOfDocumentNumber('Q-0051')).toBe(51);
+    expect(sequenceOfDocumentNumber('INV-0003')).toBe(3);
+  });
+
+  it('does not care what the prefix was', () => {
+    expect(sequenceOfDocumentNumber('QUO/2026/0007')).toBe(7);
+    expect(sequenceOfDocumentNumber('7')).toBe(7);
+  });
+
+  it('ignores padding that has since changed', () => {
+    expect(sequenceOfDocumentNumber('Q-51')).toBe(51);
+  });
+
+  it('counts a draft as nothing', () => {
+    expect(sequenceOfDocumentNumber('')).toBe(0);
+    expect(sequenceOfDocumentNumber(null)).toBe(0);
+    expect(sequenceOfDocumentNumber(undefined)).toBe(0);
+    expect(sequenceOfDocumentNumber('DRAFT')).toBe(0);
+  });
+
+  it('takes the highest across a series', () => {
+    expect(highestSequenceInUse(['Q-0001', 'Q-0051', '', null, 'Q-0009'])).toBe(51);
+  });
+
+  it('is zero when nothing is numbered', () => {
+    expect(highestSequenceInUse([])).toBe(0);
+    expect(highestSequenceInUse([null, undefined, ''])).toBe(0);
+  });
+
+  it('is not fooled by string ordering', () => {
+    expect(highestSequenceInUse(['Q-9', 'Q-0051'])).toBe(51);
   });
 });

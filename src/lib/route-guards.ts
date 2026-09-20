@@ -285,6 +285,52 @@ export const withdrawQuoteRefusal = ({
   return ok;
 };
 
+// --- rewinding a document sequence ----------------------------------------
+
+/**
+ * Moving the next-number counter backwards.
+ *
+ * This used to be refused flatly, which was the wrong rule wearing the right
+ * clothes. The thing worth preventing is two documents claiming the same
+ * number - not the counter moving. So the test is whether the number being
+ * rewound onto is one something already carries. Once the test documents are
+ * deleted, nothing carries Q-0051, and starting the real series at Q-0001 is
+ * safe in a way no amount of policy can make it unsafe.
+ *
+ * `highestInUse` must count documents in the trash too. A trashed Q-0051 is one
+ * click from being a live Q-0051 again.
+ */
+export const sequenceRewindRefusal = ({
+  label,
+  requested,
+  current,
+  highestInUse,
+}: {
+  /** 'quotation' or 'invoice', as it should read in the sentence. */
+  label: string;
+  requested: number;
+  current: number;
+  highestInUse: number;
+}): GuardResult => {
+  if (!Number.isFinite(requested) || requested < 1) {
+    return {
+      error: `The next ${label} number must be 1 or more.`,
+      status: 422,
+    };
+  }
+
+  if (requested >= current) return ok;
+
+  if (requested > highestInUse) return ok;
+
+  return {
+    error: `The next ${label} number cannot go back to ${requested} - ${highestInUse} is already in use. Delete those ${label}s and empty the trash first, or set it to ${
+      highestInUse + 1
+    } or higher.`,
+    status: 422,
+  };
+};
+
 // --- a required id --------------------------------------------------------
 
 /** The dullest guard, and the one a typo in a front component lands on first. */

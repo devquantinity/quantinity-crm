@@ -151,7 +151,89 @@ Nine times out of ten: Docker Desktop is not running. Open it, wait, try again.
 - [ ] Run `backup-rehearsal.command` and compare the row counts
 - [ ] Copy `backups/` somewhere off this laptop
 - [ ] Run `make-durable.command`, reboot, confirm the app comes back
-- [ ] Clear the test records (see HARDENING.md) before real ones mix in
-- [ ] Decide where document numbering restarts, in Billing settings
+- [ ] Clear the test records and restart the numbering (below)
+- [ ] Put your real business details in Billing settings - they are frozen onto
+      every document at issue, so a placeholder address on Q-0001 stays there
 - [ ] Run `npm test` and `npm run lint` yourself — see HARDENING.md for why
       (`npm test` now runs the unit tests too; it did not before)
+
+
+## Starting real use
+
+### 1. Your details, first
+
+Settings -> Billing. The issuer block (name, registration number, address,
+email, phone) and the payment instructions are **copied onto each document when
+it is issued** and never re-read. Getting them right afterwards does not fix the
+quotation already sent. As of writing they still say "Level 8, Menara Example".
+
+### 2. Delete the test records
+
+Twenty deletes in two stages: the record goes to the trash, and only
+**Permanently destroy record** actually removes it. Children are removed with
+their parent at that second stage, not the first - so nothing is orphaned as
+long as you finish the job.
+
+Delete in this order, then destroy each from the trash:
+
+| Order | Object | What is there | Goes with it |
+|---|---|---|---|
+| 1 | Invoices | INV-0002, INV-0003, INV-0004 | - |
+| 2 | Projects | Enterprise iPad Deployment, MacBook Pro Fleet Upgrade, iMac Office Workstation Refresh | 5 milestones |
+| 3 | Quotes | Q-0001, Q-0001 Rev 2, Q-0050, Q-0051, Q-0052, Copy of Q-0051 | 15 quote items |
+| 4 | Conversations | Andrew King, Nurul Huda | 3 chat messages |
+| 5 | Products | Managed hosting, Website design | - |
+
+Invoices go first because they are the only record that survives its parent: a
+deleted project leaves its invoice behind with an empty Project field, rather
+than taking it along. The rest clean up after themselves.
+
+Keep the two products if they are services you actually sell. Nothing else in
+the list is real.
+
+### 3. Restart the numbering
+
+Settings -> Billing -> Next number, for quotations and invoices separately.
+
+The counter moves forward freely. It moves **back** only onto a number nothing
+is using - and a document in the trash still counts as using its number. So this
+only works after step 2 is finished, destroys included. If it refuses, it tells
+you the highest number still in use; something is still in the trash.
+
+Set both to 1 unless you are continuing a paper series, in which case set them to
+the next number of that series.
+
+### 4. The first real quotation
+
+1. Create the company and the person. (The 599 companies already in there are
+   Twenty's demo data - see below.)
+2. Create a Deal for the work, and set its company.
+3. On the Deal, add a Quotation in the Quotations section. Type the lines, or
+   use **Add items from catalogue** to pull them from Products.
+4. Read it over. This is the last moment it can be edited.
+5. **Issue quotation**. It takes Q-0001, freezes your details and the totals,
+   makes the document read-only, and copies the client link to your clipboard.
+6. Paste that link to the client. Nothing about it expires on its own.
+7. The client accepts on the page itself. The quotation flips to ACCEPTED on
+   your side - you do not accept it for them.
+8. On the Deal, **Start project**. It carries the value across from the accepted
+   quotation and turns the lines into milestones.
+9. On a milestone, **Bill this milestone** to raise the invoice, then **Issue
+   invoice** (again, the link lands on your clipboard), then **Mark invoice
+   paid** when the money arrives.
+
+To change an issued quotation, **Revise quotation** - the old one is superseded,
+the number stays, the revision goes up. To drop one, **Withdraw quotation**; the
+client link stays live and shows it as withdrawn. Neither is a delete: an issued
+document has been seen by somebody outside the building.
+
+### The demo data is a separate job
+
+The workspace was seeded with Twenty's demo dataset on 14 September: 1,200
+people, 599 companies, 150 deals, 1,800 notes, 1,800 tasks, 800 calendar events,
+1,005 workspace members. None of it is yours.
+
+It does not stop you using the app - your real records simply sit alongside it -
+but it makes every search and every picker noisier. Clearing it is a few
+thousand deletions through the API and needs care around the workspace members,
+so it is its own piece of work rather than something to do by hand tonight.
