@@ -1,34 +1,60 @@
-# My Twenty App
+# Quantinity CRM
 
-Describe your app in one or two sentences.
+A CRM for small agencies and service businesses that sell work by quotation:
+quote it, win it, run it, bill it, get paid — in one place, with the document
+numbering an accountant expects.
 
-## Features
+## What it does
 
-List the top things your app does, for example:
+- **Quotations** with a continuous number series, line items, a catalogue of
+  reusable products, discounts and tax. Issuing freezes the totals and your
+  business details onto the document and makes it read-only.
+- **A client link** for every issued quotation and invoice. The client opens it
+  in a browser and accepts it there; no login, no PDF attachment.
+- **Revisions** rather than edits. A changed quotation supersedes the old one
+  and keeps its number, so the history of what was sent stays true.
+- **Projects and milestones** created from an accepted quotation, with its lines
+  carried across as the things to deliver.
+- **Invoices** raised from a milestone — deposit, progress or final — on their
+  own number series, with payment terms and instructions.
+- **A WhatsApp inbox** that matches incoming numbers to contacts and attaches a
+  conversation to the deal it belongs to.
 
-- Feature one
-- Feature two
-- Feature three
+## How it is built
 
-## Getting started
+Quantinity is an application on the [Twenty](https://twenty.com) CRM engine.
+Twenty supplies contacts, companies, deals and the interface; this repo supplies
+everything above. The engine is not forked — the app talks to it through its
+published APIs, which is what keeps upgrades survivable.
 
-Setup instructions live in [SETUP.md](SETUP.md).
+You will see the word "Twenty" throughout the tooling, the Docker image and the
+documentation you need to read. The product is Quantinity CRM; Twenty is the
+engine under it.
 
-## Publishing
+## Documentation
 
-The `Publish` workflow (`.github/workflows/publish.yml`) publishes the app to npm with provenance using [npm trusted publishing](https://docs.npmjs.com/trusted-publishers). To publish:
+| File | For |
+|---|---|
+| [SETUP.md](SETUP.md) | Getting it running on your own machine |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Running it as a service for paying customers |
+| [RUNBOOK.md](RUNBOOK.md) | Day-to-day operation, backups, starting real use |
+| [SUBSCRIPTIONS.md](SUBSCRIPTIONS.md) | The Curlec billing design — not built yet |
+| [HARDENING.md](HARDENING.md) | An honest list of what is not production-grade |
+| [CHANGELOG.md](CHANGELOG.md) | Notable changes |
 
-1. On npmjs.com register this repository as a trusted publisher of your package, pointing at the `publish.yml` workflow.
-2. Bump the version in `package.json`, then push a version tag (e.g. `git tag v1.0.0 && git push --tags`) or run the workflow manually from the Actions tab.
+New here and deploying it? Read DEPLOYMENT.md section 0 first.
 
-Publishing with provenance is also how you prove ownership when claiming your app in a Twenty marketplace.
+## Development
 
-## Changelog
+```bash
+npm install        # Node 24
+npm test           # unit + integration
+npm run lint
+npm run typecheck
+./apply.command    # build and sync into the running server
+```
 
-Notable changes are documented in [CHANGELOG.md](CHANGELOG.md).
+## Licence
 
-## Learn more
-
-- [Twenty Apps documentation](https://docs.twenty.com/developers/extend/apps/getting-started/quick-start)
-- [twenty-sdk CLI reference](https://www.npmjs.com/package/twenty-sdk)
-- [Discord](https://discord.gg/cx5n4Jzs57)
+This repo is MIT. The engine it runs on is AGPL-3.0, which carries obligations
+if you modify it and run it as a network service — see DEPLOYMENT.md section 0.

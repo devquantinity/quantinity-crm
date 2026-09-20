@@ -1,7 +1,12 @@
 # Setup
 
-Quantinity CRM is a Twenty app: Twenty supplies the CRM, this repo supplies
-quotations, projects, milestones and invoices on top of it.
+This is for running Quantinity CRM **on your own machine**, to develop it. To
+run it as a service for paying customers, read [DEPLOYMENT.md](DEPLOYMENT.md)
+instead - it is a different job with different answers.
+
+Quantinity CRM is an app on the Twenty engine: Twenty supplies contacts,
+companies, deals and the interface, this repo supplies quotations, projects,
+milestones and invoices on top.
 
 ## Prerequisites
 
