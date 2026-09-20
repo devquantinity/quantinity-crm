@@ -8,7 +8,7 @@ the bottom and is the most useful part of this file.
 | # | Item | State |
 |---|------|-------|
 | 1 | Backups | **done - PASS, restore verified** |
-| 2 | Run it properly | policy set; **Docker autostart is off** |
+| 2 | Run it properly | done - policy set, autostart off by choice |
 | 3 | Double-submit | **done, verified in the app** |
 | 4 | Route tests | done |
 | 5 | Unit test audit | done |
@@ -133,9 +133,19 @@ This is why the script reports what it found instead of printing "done". The
 setting is a checkbox: Docker Desktop > Settings > General > "Start Docker
 Desktop when you sign in".
 
-**Still not verified:** I cannot reboot the machine. Turn that setting on,
-reboot, and open localhost:2020 without touching anything. Until then this item
-is set up but unproven.
+### The decision: autostart stays off
+
+Deliberately left off. Docker Desktop is heavy on RAM and battery, and starting
+it at login would also give every other project on this machine a chance to
+bring its containers back.
+
+So the procedure after a reboot is: open Docker Desktop. The `unless-stopped`
+policy then brings Quantinity back without anything else being touched - one
+manual step, not two, and the policy still earns its place.
+
+**Not verified:** I cannot reboot the machine. The first reboot is the test:
+open Docker Desktop, wait a few seconds, then open localhost:2020 without
+pressing play on anything.
 
 ## 3. Double-submit
 

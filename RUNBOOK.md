@@ -123,16 +123,26 @@ one forward.
 
 ## After a reboot
 
-```
-./make-durable.command
-```
+**Open Docker Desktop.** That is the whole procedure.
 
-Run once. Sets the container to restart unless you stopped it deliberately, and
-reports whether Docker Desktop starts at login — without which nothing comes
-back, whatever the container is set to.
+Quantinity's container is set to `restart unless-stopped`, so it comes back by
+itself as soon as Docker is running — you do not need to find it in the list and
+press play. Give it a few seconds, then open <http://localhost:2020>.
 
-To check it worked: reboot, then open <http://localhost:2020> without touching
-anything.
+Docker Desktop is deliberately **not** set to start at login. It is heavy on RAM
+and battery, and starting it automatically would also give every other project's
+containers a chance to come back. The trade is one manual step after a reboot,
+which is the right way round for a laptop.
+
+If you ever change your mind: Docker Desktop → Settings → General → "Start
+Docker Desktop when you sign in".
+
+`make-durable.command` sets the restart policy and reports what it found. It has
+been run, and the policy is in place.
+
+### If localhost:2020 is dead
+
+Nine times out of ten: Docker Desktop is not running. Open it, wait, try again.
 
 ---
 
