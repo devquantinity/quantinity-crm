@@ -35,6 +35,7 @@ engine under it.
 
 | File | For |
 |---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the pieces fit, and the tenancy decision |
 | [SETUP.md](SETUP.md) | Getting it running on your own machine |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Running it as a service for paying customers |
 | [RUNBOOK.md](RUNBOOK.md) | Day-to-day operation, backups, starting real use |

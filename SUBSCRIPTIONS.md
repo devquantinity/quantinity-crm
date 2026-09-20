@@ -19,10 +19,16 @@ Reasons, in order of how much they matter:
    workspace would carry code that only concerns you.
 
 So: `quantinity.com` (marketing, pricing, signup, billing portal) is one
-service; the workspaces at `<customer>.quantinity.com` are the CRM. The billing
-service is the only thing allowed to create a workspace - which also means it
-is the thing that owns the slug, and must enforce the reserved-name rules in
-DEPLOYMENT.md section 2b before it hands one out.
+service; the CRM is another. The billing service is the only thing allowed to
+create a workspace - which also makes it the **owner of the slug**.
+
+That is a bigger job than it sounds, because the target URL is
+`crm.quantinity.com/<company-name>`: the slug is a path segment, so it shares a
+namespace with the application's own routes. A customer who takes `settings`
+shadows a real page. The billing service must enforce the reserved list in
+[ARCHITECTURE.md](ARCHITECTURE.md) section 3, generated from the route table
+rather than typed from memory, and it must do so from the first signup - a slug
+handed out today is one you are stuck with.
 
 ---
 

@@ -112,104 +112,61 @@ you already know it. HTTPS is not optional: the auth cookies require it.
 
 ## 2b. Addresses: how a customer reaches their CRM
 
-**The engine routes workspaces by subdomain, not by path.**
+**The target is `crm.quantinity.com/<company-name>`.** That decision, what it
+requires and the controls it obliges you to build are in
+[ARCHITECTURE.md](ARCHITECTURE.md). Read it before you build anything that
+depends on the URL shape.
 
-`crm.quantinity.com/company-name` is not something it does. The frontend is a
-single-page app served at the root, and the workspace is worked out from the
-hostname. Making a path prefix work means rewriting the frontend's routing and
-every place the backend builds a URL - the fork this project is trying not to
-own.
-
-So a customer's CRM lives at a subdomain of whatever you make the default
-domain. Two sensible layouts are below; pick one before you buy a certificate.
-
-### The sign-in entry point is already built
-
-You do not have to build a "find my workspace" page. The engine's **default
-domain** is a sign-in screen: the customer signs in there with a password,
-Google or SSO, picks their workspace if they belong to more than one, and gets
-sent to its subdomain. Deep links survive the round trip, so a link into a
-specific record still lands on that record after sign-in.
-
-So the customer only ever has to remember one address. Which one it is depends
-on the layout you pick below - the default domain **is** the sign-in page.
-
-### Two layouts, both fine
-
-Workspace subdomains are built by prefixing the default domain. So the default
-domain decides everything else.
-
-**A - the app owns the apex**
+**What you deploy today is not that yet.** The engine resolves the workspace
+from the hostname, and moving that to the path is a fork of the engine that
+does not exist. Until it does, this is what the server actually serves:
 
 ```
-  quantinity.com               <- default domain: sign-in, workspace picker
-  acme.quantinity.com          <- Acme's workspace
-  www.quantinity.com           <- marketing, pricing, signup
-```
-
-Third-level subdomains, so Cloudflare's free proxied certificate
-(`*.quantinity.com`) covers them and you can leave the orange cloud on. The
-cost is that marketing cannot have the apex - it lives on `www.` or on a
-separate domain.
-
-**B - everything under crm. (recommended if you want the marketing site on the
-apex)**
-
-```
-  crm.quantinity.com           <- default domain: sign-in, workspace picker
+  crm.quantinity.com           <- default domain: sign-in and workspace picker
   acme.crm.quantinity.com      <- Acme's workspace
   quantinity.com               <- marketing, pricing, signup
 ```
 
-Cleaner separation: the marketing site keeps the main domain, and `crm.` is
-obviously the product. The workspaces are fourth-level subdomains, which
-Cloudflare's **free proxied** certificate does not cover - `*.quantinity.com`
-is one level only.
+The sign-in entry point is already built: the default domain is a sign-in
+screen that finds the customer's workspace, lets them pick if they are in more
+than one, and sends them to it. Deep links survive the round trip.
 
-That is a Cloudflare-proxy limit, not a limit on nesting. It costs nothing to
-work around:
+### Serve the path form today, with a redirect
 
-- Let Caddy get a **Let's Encrypt wildcard for `*.crm.quantinity.com`** over
-  DNS-01, with an API token for your DNS provider. Free, renews itself.
-- Keep those records **DNS-only in Cloudflare** (grey cloud, not orange), so
-  the browser gets Caddy's certificate rather than Cloudflare's edge one.
+One proxy rule gives customers the address they were promised while the fork is
+still a plan:
 
-Only if you insist on proxying them through Cloudflare do you need Advanced
-Certificate Manager at about $10 a month.
+```
+  crm.quantinity.com/acme  ──302──▶  acme.crm.quantinity.com
+```
 
-### What DNS and TLS need
+They type, bookmark and share the path form; the browser finishes on whatever
+the engine serves. The rule is deleted the day the fork lands, and nothing that
+was shared in the meantime breaks, because the redirect keeps working.
 
-For layout A: a wildcard A record `*.quantinity.com` and a wildcard certificate
-for the same.
+The slug rules in ARCHITECTURE.md section 3 apply from the first signup, not
+from the fork. A slug handed out now is a slug you are stuck with.
 
-For layout B: a wildcard A record `*.crm.quantinity.com` and a Let's Encrypt
-wildcard for the same, over DNS-01, DNS-only in Cloudflare.
+### DNS and TLS
 
-Either way it is one record and one certificate, set up once. Nothing to touch
-when a customer signs up.
+- Wildcard A record: `*.crm.quantinity.com` → the server
+- A Let's Encrypt wildcard for `*.crm.quantinity.com` over DNS-01. Caddy will
+  get and renew it given a DNS provider API token.
+- Keep those records **DNS-only in Cloudflare** (grey cloud). The free proxied
+  certificate covers `*.quantinity.com` only - one level - so a proxied
+  fourth-level subdomain gets a certificate warning. Proxying them anyway means
+  Advanced Certificate Manager, about $10 a month.
 
-### Choose the slug rules now
-
-The slug is in the URL, it is public, and changing it later breaks every link
-and bookmark a customer has.
-
-- **Reserve the obvious names** before anyone can take them: `www`, `app`,
-  `api`, `admin`, `mail`, `crm`, `static`, `status`, `help`, `support`,
-  `billing`. A customer who registers `api` can make your own service
-  unreachable.
-- **Block names that impersonate.** Somebody will try to register a bank's name
-  or a competitor's. Keep a denylist and a manual review for anything close.
-- **Decide whether a slug can change.** If yes, keep the old one redirecting
-  forever. If no, say so on the signup form, before they type it.
-- Lowercase, letters, digits and hyphens. No leading or trailing hyphen, 3-30
-  characters.
+One record and one certificate, set up once. Nothing to touch when a customer
+signs up.
 
 ### Custom domains, later
 
 A workspace can be given its own domain - `crm.acmesdn.com` pointing at their
-workspace - which is a good paid upgrade. Be aware it currently insists on a
-`CLOUDFLARE_API_KEY` even if you intend to set the DNS by hand; there is an open
-issue and a PR for it. Do not sell it until you have made it work once.
+workspace - which is a good paid upgrade and sidesteps the URL argument
+entirely for the customers who care about it. Be aware it currently insists on
+a `CLOUDFLARE_API_KEY` even if you intend to set the DNS by hand; there is an
+open issue and a PR for it. Do not sell it until you have made it work once.
 
 ---
 
