@@ -154,3 +154,4 @@ Nine times out of ten: Docker Desktop is not running. Open it, wait, try again.
 - [ ] Clear the test records (see HARDENING.md) before real ones mix in
 - [ ] Decide where document numbering restarts, in Billing settings
 - [ ] Run `npm test` and `npm run lint` yourself — see HARDENING.md for why
+      (`npm test` now runs the unit tests too; it did not before)

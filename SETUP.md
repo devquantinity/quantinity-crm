@@ -88,10 +88,16 @@ quotations, projects, milestones and invoices on top of it.
 
 ## Verifying
 
-- `npm run lint` — oxlint
+- `npm test` — everything: unit tests then integration tests
+- `npm run test:unit` — the unit tests alone. No server needed, takes seconds
+- `npm run test:integration` — the integration tests alone. **Needs the server
+  up, and deploys the app as a side effect** — it uploads your current source
+  before it runs
 - `npm run typecheck` — type-check
-- `npm run test:unit` — unit tests, no server needed
-- `npm test` — integration tests, needs the server up
+- `npm run lint` — oxlint
+
+`npm test` used to mean the integration tests only, so it ran two tests and
+skipped the other 230 without saying so. It now runs both.
 
 ## Operating it
 

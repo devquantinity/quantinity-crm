@@ -390,9 +390,20 @@ before real client data joins them. I cannot delete records.
 ### 10. Tests were verified by my runner, not by vitest
 
 `npm test` and `npm run lint` use binaries built for macOS and do not run in my
-sandbox. I ran all 213 assertions through a minimal runner I wrote, and checked
-it genuinely fails on a wrong expectation. That is honest but it is not the
-same thing. **Run `npm test` and `npm run lint` yourself.**
+sandbox. I ran every assertion through a minimal runner I wrote, and checked it
+genuinely fails on a wrong expectation. That is honest but it is not the same
+thing.
+
+**And `npm test` did not run them either.** It was wired to `vitest.config.ts`,
+which includes only `*.integration-test.ts` - so it ran 2 integration tests,
+skipped all 230 unit tests, and reported a clean pass. Telling you to "run
+`npm test` to verify" was advice that verified almost nothing.
+
+`npm test` now runs both. `npm run test:unit` is the fast one that needs no
+server; `npm run test:integration` needs the server **and redeploys the app as
+a side effect**, which is worth knowing before running it mid-edit.
+
+Still outstanding: **run `npm test` and `npm run lint` and confirm both pass.**
 
 ### 11. No HTTP-level tests, and thirteen routes still untested
 
