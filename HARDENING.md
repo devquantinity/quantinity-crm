@@ -403,7 +403,21 @@ skipped all 230 unit tests, and reported a clean pass. Telling you to "run
 server; `npm run test:integration` needs the server **and redeploys the app as
 a side effect**, which is worth knowing before running it mid-edit.
 
-Still outstanding: **run `npm test` and `npm run lint` and confirm both pass.**
+### Confirmed (20 Sep)
+
+```
+Test Files  14 passed (14)
+     Tests  231 passed (231)      <- unit, real vitest
+     Tests  2 passed (2)          <- integration
+Found 0 warnings and 0 errors.    <- oxlint
+```
+
+**Vitest agrees with my runner on every test.** My testbed counted 230 and
+vitest counts 231 - the extra is `application-config.test.ts`, which imports
+from `constants/` rather than `lib/` and so was never copied into my testbed.
+No disagreement about any test's result, which was the open question.
+
+This item is closed.
 
 ### 11. No HTTP-level tests, and thirteen routes still untested
 
