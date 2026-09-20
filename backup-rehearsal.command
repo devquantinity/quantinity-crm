@@ -53,11 +53,14 @@ esac
 
 echo "--- what is in there ---"
 count_rows() {
-  # $1 = container, $2 = password. Lists every non-empty table in the workspace
-  # schema with its row count. Not a fixed list of names - an earlier version
-  # guessed at them, found none, and printed nothing at all, which looked
-  # exactly like a successful check.
-  docker exec -e PGPASSWORD="$2" "$1" psql -U "$PGUSER" -d "$PGDB" -Atc "
+  # $1 container, $2 password, $3 host, $4 port. Lists every non-empty table in
+  # the workspace schema with its row count.
+  #
+  # The host and port are NOT optional. Without them psql goes to a unix socket,
+  # which exists in the stock postgres image and does not in Twenty's - so the
+  # scratch side worked, the live side errored, and the verdict compared an
+  # error message against real numbers.
+  docker exec -e PGPASSWORD="$2" "$1" psql -U "$PGUSER" -h "$3" -p "$4" -d "$PGDB" -Atc "
     select c.relname||' = '||
       (xpath('/row/c/text()', query_to_xml(
         format('select count(*) as c from %I.%I', n.nspname, c.relname),
@@ -67,7 +70,7 @@ count_rows() {
     order by 1;" 2>&1 | grep -v ' = 0$' | sort
 }
 
-count_rows "$APP" "$PGPASS" > "$HERE/.rows-before.txt"
+count_rows "$APP" "$PGPASS" "$PGHOST" "$PGPORT" > "$HERE/.rows-before.txt"
 echo "tables with rows, before: $(wc -l < "$HERE/.rows-before.txt" | tr -d ' ')"
 head -20 "$HERE/.rows-before.txt"
 
@@ -80,9 +83,15 @@ echo "wrote $DUMP ($(du -h "$DUMP" | cut -f1))"
 echo "--- restoring into a THROWAWAY container (live db untouched) ---"
 SCRATCH="quantinity-restore-test-$$"
 PGVER=$(docker exec -e PGPASSWORD="$PGPASS" "$APP" psql -U "$PGUSER" -h "$PGHOST" -p "$PGPORT" -d "$PGDB" -Atc "show server_version_num;" 2>/dev/null)
-IMG="postgres:16-alpine"
-[ -n "$PGVER" ] && [ "$PGVER" -ge 170000 ] 2>/dev/null && IMG="postgres:17-alpine"
-echo "scratch image: $IMG (live server_version_num=$PGVER)"
+# server_version_num is major*10000 + minor: 180006 is Postgres 18.
+# The first version of this used a >= threshold and put an 18 dump into a 17
+# container. It happened to work. Restoring a newer dump into an older server
+# is not something to leave to luck - newer pg_dump emits syntax the older psql
+# does not know, and the failure is partial and quiet.
+PGMAJOR=$(( ${PGVER:-0} / 10000 ))
+[ "$PGMAJOR" -lt 13 ] && PGMAJOR=16
+IMG="postgres:${PGMAJOR}-alpine"
+echo "scratch image: $IMG (live server_version_num=${PGVER:-unknown}, major $PGMAJOR)"
 
 docker run -d --name "$SCRATCH" -e POSTGRES_PASSWORD=rehearsal -e POSTGRES_USER="$PGUSER" \
   -e POSTGRES_DB="$PGDB" "$IMG" || { echo "FAIL: could not start the scratch container."; read "?Press return."; exit 1; }
@@ -110,7 +119,7 @@ echo "(role/ownership errors are expected and harmless - the scratch container h
 
 echo ""
 echo "--- did it come back? ---"
-count_rows "$SCRATCH" rehearsal > "$HERE/.rows-after.txt"
+count_rows "$SCRATCH" rehearsal localhost 5432 > "$HERE/.rows-after.txt"
 echo "tables with rows, after:  $(wc -l < "$HERE/.rows-after.txt" | tr -d ' ')"
 head -20 "$HERE/.rows-after.txt"
 
@@ -118,7 +127,11 @@ docker rm -f "$SCRATCH" >/dev/null 2>&1
 
 echo ""
 echo "=================== VERDICT ==================="
-if [ ! -s "$HERE/.rows-before.txt" ]; then
+if grep -qiE '^psql: error|could not connect|is the server running' "$HERE/.rows-before.txt"; then
+  echo "INCONCLUSIVE: could not read the live database, so there was nothing to"
+  echo "compare against. This says nothing about the backup either way."
+  cat "$HERE/.rows-before.txt"
+elif [ ! -s "$HERE/.rows-before.txt" ]; then
   echo "INCONCLUSIVE: the live database reported no tables with rows."
   echo "Nothing was compared. Do not rely on this backup."
 elif diff -q "$HERE/.rows-before.txt" "$HERE/.rows-after.txt" >/dev/null 2>&1; then
