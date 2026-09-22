@@ -79,13 +79,21 @@ between versions and a stale copy here would be worse than a link:
 You need four services: **server**, **worker**, **Postgres**, **Redis**. The
 worker is not optional - without it, background jobs silently never run.
 
+**Use `deploy/docker-compose.override.yml` beside Twenty's compose file.** The
+stock file passes only a fixed list of variables into the containers, builds
+its own `PG_DATABASE_URL` (so yours is ignored and the password stays
+`postgres`), and publishes port 3000 to the internet around the proxy. The
+override fixes all three and adds Caddy. See `deploy/README.md`.
+
 The variables that matter most:
 
 ```env
 # Where the app lives. Wrong value breaks OAuth and every emailed link.
-SERVER_URL=https://quantinity.com
+SERVER_URL=https://crm.quantinity.com
 
 PG_DATABASE_URL=postgres://user:password@host:5432/default
+# Managed Postgres whose CA Node does not trust (DigitalOcean, most others):
+# PG_SSL_ALLOW_SELF_SIGNED=true
 REDIS_URL=redis://host:6379
 
 # Encrypts secrets at rest. Generate once, back it up somewhere that is not
@@ -94,7 +102,7 @@ ENCRYPTION_KEY=<long random string>
 
 # Files. Local disk is the default and it is wrong for production.
 STORAGE_TYPE=S_3
-# ...plus the STORAGE_S3_* values for your bucket
+# ...plus STORAGE_S3_REGION, _NAME, _ENDPOINT, _ACCESS_KEY_ID, _SECRET_ACCESS_KEY
 
 # Every customer is a workspace in this one installation.
 IS_MULTIWORKSPACE_ENABLED=true
@@ -105,8 +113,8 @@ on it.** There is a history of it breaking login on some versions. Turn it on,
 create two workspaces, log out, log back into both. If that works, you are fine.
 If it does not, you have found it early rather than in front of a customer.
 
-Put a reverse proxy in front with real TLS - Caddy is the least work, nginx if
-you already know it. HTTPS is not optional: the auth cookies require it.
+Put a reverse proxy in front with real TLS - `deploy/Caddyfile`, which gets
+and renews its own certificate. HTTPS is not optional: the auth cookies require it.
 
 ---
 
@@ -122,19 +130,20 @@ from the hostname, and moving that to the path is a fork of the engine that
 does not exist. Until it does, this is what the server actually serves:
 
 ```
-  crm.quantinity.com           <- default domain: sign-in and workspace picker
+  crm.quantinity.com           <- API and OAuth callbacks (SERVER_URL)
+  app.crm.quantinity.com       <- sign-in and workspace picker (DEFAULT_SUBDOMAIN)
   acme.crm.quantinity.com      <- Acme's workspace
   quantinity.com               <- marketing, pricing, signup
 ```
 
-The sign-in entry point is already built: the default domain is a sign-in
-screen that finds the customer's workspace, lets them pick if they are in more
+The sign-in entry point is already built: `app.crm.quantinity.com` is a
+sign-in screen that finds the customer's workspace, lets them pick if they are in more
 than one, and sends them to it. Deep links survive the round trip.
 
 ### Serve the path form today, with a redirect
 
-One proxy rule gives customers the address they were promised while the fork is
-still a plan:
+One proxy rule (in `deploy/Caddyfile`) gives customers the address they were
+promised while the fork is still a plan:
 
 ```
   crm.quantinity.com/acme  ──302──▶  acme.crm.quantinity.com
@@ -149,9 +158,9 @@ from the fork. A slug handed out now is a slug you are stuck with.
 
 ### DNS and TLS
 
-- Wildcard A record: `*.crm.quantinity.com` → the server
-- A Let's Encrypt wildcard for `*.crm.quantinity.com` over DNS-01. Caddy will
-  get and renew it given a DNS provider API token.
+- A records: `crm.quantinity.com` and `*.crm.quantinity.com` → the server
+- A Let's Encrypt wildcard for `*.crm.quantinity.com` over DNS-01. Caddy gets
+  and renews it given a Cloudflare API token.
 - Keep those records **DNS-only in Cloudflare** (grey cloud). The free proxied
   certificate covers `*.quantinity.com` only - one level - so a proxied
   fourth-level subdomain gets a certificate warning. Proxying them anyway means
@@ -181,8 +190,8 @@ Then:
 AUTH_GOOGLE_ENABLED=true
 AUTH_GOOGLE_CLIENT_ID=<from Google>
 AUTH_GOOGLE_CLIENT_SECRET=<from Google>
-AUTH_GOOGLE_CALLBACK_URL=https://quantinity.com/auth/google/redirect
-AUTH_GOOGLE_APIS_CALLBACK_URL=https://quantinity.com/auth/google-apis/get-access-token
+AUTH_GOOGLE_CALLBACK_URL=https://crm.quantinity.com/auth/google/redirect
+AUTH_GOOGLE_APIS_CALLBACK_URL=https://crm.quantinity.com/auth/google-apis/get-access-token
 ```
 
 **The two callback URLs must be pasted verbatim into Google's "Authorised
@@ -198,9 +207,11 @@ Keep password login on as well (`AUTH_PASSWORD_ENABLED=true`) unless you have
 decided every customer will use Google. Someone will not have a Google account,
 and it will be the customer who pays the most.
 
-Also decide on `IS_SIGN_UP_DISABLED`. Leaving sign-up open means anyone who
-finds the URL can create a workspace and use the product for free. Once billing
-exists, only the billing service should be creating workspaces.
+Leave `IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS=true` (Twenty's
+default). Only server admins create workspaces and sign-up without an
+invitation is refused, so nobody who finds the URL gets the product free. Until
+billing exists, you create each customer's workspace and invite its owner.
+(`IS_SIGN_UP_DISABLED`, which older guides mention, no longer exists.)
 
 ---
 
@@ -209,26 +220,44 @@ exists, only the billing service should be creating workspaces.
 The engine gives you contacts, companies and deals. Quotations, projects,
 milestones, invoices and the WhatsApp inbox come from this repo.
 
+`./apply.command` is **not** how this reaches production. `apply` is a
+development sync into one workspace. Production is publish once, then install
+per workspace. Run it from your laptop, not the server - the build takes an 8
+GB heap.
+
 ```bash
-npm install          # Node 24. Not 23 - it breaks npm install.
-./apply.command      # builds and syncs into the running server
+npm install                     # Node 24. Not 23 - it breaks npm install.
+
+# once
+npm run quantinity -- remote:add --url https://crm.quantinity.com --as production
+
+# every release: bump "version" in package.json first - the server refuses
+# a version that is not strictly higher than the one deployed
+npm run quantinity -- app:publish --private --remote production
+
+# once, into the workspace the remote is logged into
+npm run quantinity -- app:install --remote production
 ```
 
-`apply.command` points at `http://localhost:2020` by default. For a real server
-you will authenticate the CLI against your deployment first; run
-`npm run quantinity -- --help` and use the login command for your version.
+**Every customer workspace installs it separately.** There is no install into
+all workspaces. In your own workspace: Settings → Applications →
+Registrations → the app → Distribution → **Copy share link**, and open it in
+the customer's workspace. Then turn on **auto-upgrade** in the app's General
+tab there, or each later publish sits waiting in that workspace's settings.
 
-Two things about `apply`:
+Never remove an object or field from the source on a server with customers on
+it without a plan: a deleted object takes every record in it.
 
-- It runs with `--no-delete` on purpose. Without that flag it offers to delete
-  any object no longer in the source - and a deleted object takes every record
-  in it. Never remove that flag on a server with customers on it.
-- Run it against a copy first. An app sync touches every workspace.
+The GitHub CD workflow cannot do this yet: Twenty's deploy and install actions
+run `yarn install --immutable`, and this repo is npm-only.
 
-After the first apply, each customer's workspace needs its billing details set
-in Settings → Billing. Those get frozen onto every quotation and invoice at the
+After install, each customer's workspace needs its billing details set in
+Settings → Billing. Those get frozen onto every quotation and invoice at the
 moment it is issued, so they must be that customer's real company details, not
-yours.
+yours. Set **Public base URL** to that workspace's address
+(`https://acme.crm.quantinity.com`), and open one client link in a private
+window to prove it. Their WhatsApp webhook is
+`https://acme.crm.quantinity.com/s/whatsapp/webhook`.
 
 ---
 
@@ -262,7 +291,7 @@ Twenty ships frequently and migrations run on boot.
 1. Back up. Prove the backup restores.
 2. Read their release notes for breaking changes.
 3. Upgrade a staging copy restored from last night's dump.
-4. Run `./apply.command` against staging - the app can break on an engine
+4. Publish and install the app on staging - the app can break on an engine
    upgrade, and you want to find that on staging.
 5. Only then, production. Off-hours.
 

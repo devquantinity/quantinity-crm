@@ -1,0 +1,35 @@
+# crm.quantinity.com         API, GraphQL, OAuth callbacks (SERVER_URL)
+# app.crm.quantinity.com     sign-in and workspace picker (DEFAULT_SUBDOMAIN)
+# acme.crm.quantinity.com    Acme's workspace
+#
+# CF_API_TOKEN: Cloudflare token with Zone > DNS > Edit on quantinity.com.
+# Keep both DNS records grey-cloud (DNS-only).
+
+crm.quantinity.com, *.crm.quantinity.com {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+
+	# Bare host root -> the sign-in page.
+	@root {
+		host crm.quantinity.com
+		path /
+	}
+	redir @root https://app.crm.quantinity.com/ 302
+
+	# crm.quantinity.com/acme -> acme.crm.quantinity.com
+	#
+	# Browser navigations only (GET + Accept: text/html), single path segment,
+	# so API traffic on this host - /graphql, /metadata, /auth/..., /s/... -
+	# never matches. Delete this block the day path tenancy exists.
+	@slug {
+		host crm.quantinity.com
+		method GET
+		header Accept *text/html*
+		path_regexp slug ^/([a-z0-9][a-z0-9-]{1,28}[a-z0-9])/?$
+		not path /verify /welcome /healthz /graphql /metadata
+	}
+	redir @slug https://{re.slug.1}.crm.quantinity.com/ 302
+
+	reverse_proxy server:3000
+}

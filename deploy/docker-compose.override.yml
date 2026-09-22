@@ -1,0 +1,50 @@
+# Quantinity additions to Twenty's stock docker-compose.yml.
+#
+# Put this beside Twenty's compose file (for the version in TAG) and `.env`.
+# `docker compose up -d` merges it automatically. Needs Compose v2.24+ for
+# the !reset tag.
+#
+# Why it exists - the stock file has three traps:
+#
+# 1. It passes a FIXED list of variables into the containers. Anything else in
+#    .env (IS_MULTIWORKSPACE_ENABLED, AUTH_GOOGLE_*, EMAIL_*, S3 keys) never
+#    arrives, silently. env_file fixes that.
+# 2. It builds PG_DATABASE_URL itself from PG_DATABASE_* variables, so a
+#    PG_DATABASE_URL in .env is ignored and the password stays `postgres`.
+# 3. It publishes port 3000 on every interface. Docker port publishing goes
+#    around ufw, so that is plain HTTP open to the internet beside Caddy.
+
+services:
+  server:
+    env_file: .env
+    environment:
+      PG_DATABASE_URL: ${PG_DATABASE_URL}
+    ports: !reset []
+
+  worker:
+    env_file: .env
+    environment:
+      PG_DATABASE_URL: ${PG_DATABASE_URL}
+
+  caddy:
+    build: ./caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CF_API_TOKEN: ${CF_API_TOKEN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - server
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+# Managed Postgres instead of the `db` container: an override cannot remove a
+# service, so delete `db`, the `db-data` volume and `db` from both depends_on
+# in Twenty's compose file by hand.
