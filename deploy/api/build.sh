@@ -38,7 +38,15 @@ log() { echo "[$(date -u +%FT%TZ)] $*"; }
 # Whatever branch the server's checkout is on.
 log "Pulling latest changes ..."
 cd "$REPO"
+before="$(git rev-parse HEAD)"
 git pull || log "WARNING: git pull failed, continuing with the checkout on disk"
+
+# bash keeps running the copy of this script it started with, so a pull that
+# changed it would otherwise only take effect on the next restart.
+if [ "$(git rev-parse HEAD)" != "$before" ] && [ -z "${QUANTINITY_REEXEC:-}" ]; then
+  log "New commits pulled, restarting with the updated script"
+  QUANTINITY_REEXEC=1 exec bash "$HERE/build.sh"
+fi
 
 # --- environment ------------------------------------------------------------
 
