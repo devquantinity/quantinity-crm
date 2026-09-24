@@ -70,7 +70,12 @@ build_release() {
 
   log "Building engine $VERSION ..."
   rm -rf "$tmp"
-  git clone --quiet --depth 1 --branch "twenty/$VERSION" "$TWENTY_GIT" "$tmp"
+  # Only the packages the server needs, as the engine's Dockerfile copies
+  # them. With the whole monorepo checked out, nx also builds the frontend
+  # packages, whose dependencies the focused install below never installs.
+  git clone --quiet --depth 1 --filter=blob:none --sparse --branch "twenty/$VERSION" "$TWENTY_GIT" "$tmp"
+  git -C "$tmp" sparse-checkout set .yarn \
+    packages/twenty-server packages/twenty-emails packages/twenty-shared packages/twenty-client-sdk
 
   (
     # Wherever yarn is called from, $PWD must be the checkout root.
@@ -112,7 +117,9 @@ if [ "${build_status:-0}" -ne 0 ]; then
   if [ -e "$CURRENT/.built" ]; then
     log "ERROR: build of $VERSION FAILED. Still running the previous build: $(readlink "$CURRENT")"
   else
-    log "ERROR: build of $VERSION FAILED and there is no previous build to run."
+    log "ERROR: build of $VERSION FAILED and there is no previous build to run. Retrying in 5 minutes."
+    # Without this, systemd restarts straight away into another full clone.
+    sleep 300
     exit 1
   fi
 fi

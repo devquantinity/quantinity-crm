@@ -16,7 +16,11 @@ SRC=".twenty-src"
 
 echo "Building web app for engine $VERSION ..."
 rm -rf "$SRC" dist
-git clone --quiet --depth 1 --branch "twenty/$VERSION" https://github.com/twentyhq/twenty.git "$SRC"
+# Only the packages the frontend needs, as the engine's Dockerfile copies them.
+git clone --quiet --depth 1 --filter=blob:none --sparse --branch "twenty/$VERSION" https://github.com/twentyhq/twenty.git "$SRC"
+git -C "$SRC" sparse-checkout set .yarn \
+  packages/twenty-front packages/twenty-front-component-renderer packages/twenty-ui \
+  packages/twenty-shared packages/twenty-sdk packages/twenty-client-sdk
 cd "$SRC"
 
 export NX_DAEMON=false NX_NO_CLOUD=true
