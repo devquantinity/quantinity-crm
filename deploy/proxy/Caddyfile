@@ -1,0 +1,91 @@
+# /etc/caddy/Caddyfile on the API VM.
+#
+# crm.quantinity.com         API, GraphQL, OAuth callbacks (SERVER_URL)
+# app.crm.quantinity.com     sign-in and workspace picker (DEFAULT_SUBDOMAIN)
+# acme.crm.quantinity.com    Acme's workspace
+#
+# Every hostname is served here, and split by path:
+#
+#   engine API paths  ->  the API on 127.0.0.1:3000 (this VM)
+#   everything else   ->  the web app on Vercel
+#
+# The browser sees one origin per workspace, exactly as when the engine served
+# its own frontend. That is not optional: the engine accepts a session cookie
+# only from its own origin (it compares Origin to the raw Host header), and it
+# resolves the workspace for public routes like /s/whatsapp/webhook from the
+# Host header. Pointing *.crm.quantinity.com at Vercel directly breaks sign-in
+# and every customer's WhatsApp webhook. See deploy/README.md.
+#
+# Environment (systemctl edit caddy -> [Service] EnvironmentFile=/etc/caddy/env):
+#   CF_API_TOKEN    Cloudflare token, Zone > DNS > Edit on quantinity.com, for
+#                   the wildcard certificate (DNS-01).
+#   WEB_UPSTREAM    The Vercel project's production hostname, e.g.
+#                   quantinity-crm.vercel.app
+#
+# Keep both DNS records grey-cloud (DNS-only).
+
+crm.quantinity.com, *.crm.quantinity.com {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+
+	# Bare host root -> the sign-in page.
+	@root {
+		host crm.quantinity.com
+		path /
+	}
+	redir @root https://app.crm.quantinity.com/ 302
+
+	# crm.quantinity.com/acme -> acme.crm.quantinity.com
+	#
+	# Browser navigations only (GET + Accept: text/html), single path segment,
+	# so API traffic on this host never matches. Delete this block the day path
+	# tenancy exists.
+	@slug {
+		host crm.quantinity.com
+		method GET
+		header Accept *text/html*
+		path_regexp slug ^/([a-z0-9][a-z0-9-]{1,28}[a-z0-9])/?$
+		not path /verify /welcome /healthz /graphql /metadata
+	}
+	redir @slug https://{re.slug.1}.crm.quantinity.com/ 302
+
+	# The engine's ApiPath enum (packages/twenty-shared/src/types/ApiPath.ts),
+	# which upstream routes to the server the same way in its own ingress.
+	# Re-check it on every engine upgrade: a prefix missing here serves the
+	# web app's index.html where the API should have answered.
+	@api {
+		path /admin-panel /admin-panel/*
+		path /app /app/*
+		path /application-registration-claim /application-registration-claim/*
+		path /apps /apps/*
+		path /auth /auth/*
+		path /client-config /client-config/*
+		path /cloudflare /cloudflare/*
+		path /emailing /emailing/*
+		path /file /file/*
+		path /file-upload /file-upload/*
+		path /files /files/*
+		path /graphql /graphql/*
+		path /healthz /healthz/*
+		path /mcp /mcp/*
+		path /metadata /metadata/*
+		path /oauth /oauth/*
+		path /open-api /open-api/*
+		path /public-assets /public-assets/*
+		path /rest /rest/*
+		path /s /s/*
+		path /webhooks /webhooks/*
+		path /.well-known /.well-known/*
+	}
+
+	handle @api {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		reverse_proxy https://{$WEB_UPSTREAM} {
+			header_up Host {upstream_hostport}
+		}
+	}
+}

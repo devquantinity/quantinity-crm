@@ -1,0 +1,13 @@
+# /etc/logrotate.d/quantinity-api
+#
+# systemd appends to the log forever otherwise. copytruncate because the
+# service holds the file open.
+/var/log/quantinity-api.log {
+	weekly
+	rotate 8
+	compress
+	delaycompress
+	missingok
+	notifempty
+	copytruncate
+}

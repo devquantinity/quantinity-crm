@@ -1,0 +1,34 @@
+# /etc/systemd/system/quantinity-api.service
+#
+# The API server and background-job worker, built and run by build.sh.
+#
+#   systemctl daemon-reload
+#   systemctl enable --now quantinity-api
+#   systemctl restart quantinity-api      # deploy: pull, build if needed, run
+#   tail -f /var/log/quantinity-api.log
+#
+# The first start clones and builds the engine: allow 5-10 minutes before the
+# API answers. Later restarts with an unchanged deploy/TWENTY_VERSION skip the
+# build.
+
+[Unit]
+Description=Quantinity CRM API (server + worker)
+After=network-online.target redis-server.service
+Wants=network-online.target redis-server.service
+
+[Service]
+ExecStart=/bin/bash /root/quantinity-crm/deploy/api/build.sh
+WorkingDirectory=/root/quantinity-crm
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="QUANTINITY_ENV_FILE=/etc/quantinity/api.env"
+User=root
+Restart=always
+RestartSec=5
+# Give in-flight requests and jobs a moment on stop/restart.
+TimeoutStopSec=30
+KillMode=mixed
+StandardOutput=append:/var/log/quantinity-api.log
+StandardError=append:/var/log/quantinity-api.log
+
+[Install]
+WantedBy=multi-user.target

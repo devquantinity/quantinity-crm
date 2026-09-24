@@ -54,3 +54,6 @@ make-durable.log
 cli-help.txt
 .rows-before.txt
 .rows-after.txt
+
+# production build (deploy/api/build.sh)
+/.build/

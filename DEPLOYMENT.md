@@ -15,7 +15,7 @@ subscription.
 
 It is built as an **app on top of the Twenty CRM engine**. Twenty is the
 open-source engine underneath; Quantinity is the product. You will see the word
-"Twenty" constantly - in the Docker image name, the environment variables, the
+"Twenty" constantly - in the build scripts, the environment variables, the
 documentation you have to read. That is normal and it is not a mistake in this
 guide.
 
@@ -48,42 +48,51 @@ them until you have read these:
 
 | Thing | Why | Notes |
 |---|---|---|
-| A Linux server | Runs everything | See sizing below |
+| Two Linux VMs | API (+ Redis), Postgres | See sizing below. No containers |
+| A Vercel account | Hosts the web app | Separate repo, `deploy/web/` |
 | A domain | `quantinity.com` or similar | Customers will see it |
-| Object storage (S3 or compatible) | Uploaded files | Local disk loses files on container restart |
+| Object storage (S3 or compatible) | Uploaded files | Local disk ties every file to one VM's disk |
 | A Google Cloud project | "Continue with Google" sign-in | Free |
 | An SMTP sender | Invites, password resets | Postmark, Resend, SES - anything |
 | A Curlec account | Subscriptions, later | Not needed on day one |
 
-**Server sizing.** Start at 4 vCPU / 8 GB RAM / 80 GB SSD. Twenty is not light -
-the server and worker containers together will use several GB before a single
-customer signs up. Expect to move to 16 GB somewhere around 15-20 active
-workspaces; watch memory rather than guessing. Put it in Singapore or Kuala
-Lumpur, not the US, or every page load carries 200ms it does not need.
+**Sizing.** API VM 2 vCPU / 8 GB - the engine build alone wants about 4 GB,
+and the server and worker together use several GB before a single customer
+signs up, plus Redis beside them. Postgres VM 2 vCPU / 4 GB. Expect the API
+VM to need 16 GB somewhere around 15-20 active workspaces; watch memory rather
+than guessing. Both VMs in Singapore or Kuala Lumpur, in the same region,
+not the US, or every page load carries 200ms it does not need.
 
-Take the managed Postgres if the host offers one. It costs more than a container
-and it means backups, failover and point-in-time recovery are someone else's
-job. Given that every customer shares this one database, that is money well
-spent.
+Take the managed Postgres if the host offers one, in place of the Postgres VM.
+It costs more and it means backups, failover and point-in-time recovery are
+someone else's job. Given that every customer shares this one database, that is
+money well spent.
 
 ---
 
 ## 2. Deploy
 
-Follow Twenty's own Docker Compose guide for the current release - it changes
-between versions and a stale copy here would be worse than a link:
+**Bare VMs, no containers.** The layout, setup commands and the reason for
+each piece are in [deploy/README.md](deploy/README.md). In short:
+
+| Piece | Where | How it runs |
+|---|---|---|
+| API server + background worker | API VM | one systemd unit, `deploy/api/build.sh` |
+| Proxy and TLS | API VM | Caddy, `deploy/proxy/Caddyfile` |
+| Web app | Vercel | this repo, Root Directory `deploy/web` |
+| Postgres | its own VM (or managed) | `deploy/data/postgres.md` |
+| Redis | API VM, localhost only | `deploy/data/redis.md` |
+
+The worker is not optional - without it, background jobs silently never run.
+`build.sh` starts it beside the server and takes both down together if either
+dies, so systemd restarts the pair.
+
+A deploy is `git push`, then `systemctl restart quantinity-api`: it pulls,
+builds the engine only if `deploy/TWENTY_VERSION` changed, runs migrations and
+starts. For reference on the engine itself:
 
 - Self-hosting guide: https://docs.twenty.com/developers/self-host
 - Every environment variable: https://twenty.com/developers/section/self-hosting/self-hosting-var
-
-You need four services: **server**, **worker**, **Postgres**, **Redis**. The
-worker is not optional - without it, background jobs silently never run.
-
-**Use `deploy/docker-compose.override.yml` beside Twenty's compose file.** The
-stock file passes only a fixed list of variables into the containers, builds
-its own `PG_DATABASE_URL` (so yours is ignored and the password stays
-`postgres`), and publishes port 3000 to the internet around the proxy. The
-override fixes all three and adds Caddy. See `deploy/README.md`.
 
 The variables that matter most:
 
@@ -91,10 +100,10 @@ The variables that matter most:
 # Where the app lives. Wrong value breaks OAuth and every emailed link.
 SERVER_URL=https://crm.quantinity.com
 
-PG_DATABASE_URL=postgres://user:password@host:5432/default
+PG_DATABASE_URL=postgres://twenty:password@<postgres-vm-private-ip>:5432/twenty
 # Managed Postgres whose CA Node does not trust (DigitalOcean, most others):
 # PG_SSL_ALLOW_SELF_SIGNED=true
-REDIS_URL=redis://host:6379
+REDIS_URL=redis://:password@127.0.0.1:6379
 
 # Encrypts secrets at rest. Generate once, back it up somewhere that is not
 # this server, and never change it - you cannot decrypt without it.
@@ -113,8 +122,8 @@ on it.** There is a history of it breaking login on some versions. Turn it on,
 create two workspaces, log out, log back into both. If that works, you are fine.
 If it does not, you have found it early rather than in front of a customer.
 
-Put a reverse proxy in front with real TLS - `deploy/Caddyfile`, which gets
-and renews its own certificate. HTTPS is not optional: the auth cookies require it.
+Caddy on the API VM terminates TLS - `deploy/proxy/Caddyfile`, which gets and
+renews its own certificate. HTTPS is not optional: the auth cookies require it.
 
 ---
 
@@ -142,7 +151,7 @@ than one, and sends them to it. Deep links survive the round trip.
 
 ### Serve the path form today, with a redirect
 
-One proxy rule (in `deploy/Caddyfile`) gives customers the address they were
+One proxy rule (in `deploy/proxy/Caddyfile`) gives customers the address they were
 promised while the fork is still a plan:
 
 ```
@@ -158,7 +167,9 @@ from the fork. A slug handed out now is a slug you are stuck with.
 
 ### DNS and TLS
 
-- A records: `crm.quantinity.com` and `*.crm.quantinity.com` → the server
+- A records: `crm.quantinity.com` and `*.crm.quantinity.com` → the API VM, not
+  Vercel. Caddy there hands the web app's paths on to Vercel (deploy/README.md
+  says why the wildcard cannot point at Vercel itself)
 - A Let's Encrypt wildcard for `*.crm.quantinity.com` over DNS-01. Caddy gets
   and renews it given a Cloudflare API token.
 - Keep those records **DNS-only in Cloudflare** (grey cloud). The free proxied
@@ -267,15 +278,17 @@ Every customer is in one database. This section is the whole business.
 
 The repo has `backup-rehearsal.command`, which dumps the database, restores the
 dump into a scratch container, and compares row counts table by table. It prints
-PASS, FAIL or INCONCLUSIVE. It was written for the laptop; port it to the server
+PASS, FAIL or INCONCLUSIVE. It was written for the laptop, where it restores into a Docker
+container. On the Postgres VM there is no Docker: port it to restore into a
+scratch database on the same instance (`createdb`, restore, compare, `dropdb`)
 and run it nightly from cron.
 
 Rules:
 
 - **A backup nobody has restored is not a backup.** That script restores every
   time it runs, which is the point of it.
-- Keep copies **off this server**. A backup on the machine that dies is not a
-  backup. Off-site, different provider.
+- Keep copies **off the Postgres VM**. A backup on the machine that dies is not
+  a backup. Off-site, different provider.
 - Back up `ENCRYPTION_KEY` separately from the database. A dump you cannot
   decrypt is a file, not a recovery.
 - Know your restore time before you need it. Restore into a scratch server,
@@ -291,9 +304,12 @@ Twenty ships frequently and migrations run on boot.
 1. Back up. Prove the backup restores.
 2. Read their release notes for breaking changes.
 3. Upgrade a staging copy restored from last night's dump.
-4. Publish and install the app on staging - the app can break on an engine
+4. Bump `deploy/TWENTY_VERSION` - one pin drives both the API build and the
+   Vercel web build, so they stay the same version. Check the engine's `ApiPath`
+   enum against `deploy/proxy/Caddyfile` for new prefixes.
+5. Publish and install the app on staging - the app can break on an engine
    upgrade, and you want to find that on staging.
-5. Only then, production. Off-hours.
+6. Only then, production. Off-hours. API first (it migrates), web second.
 
 Never upgrade on a Friday.
 
@@ -308,8 +324,11 @@ Never upgrade on a Friday.
 | `redirect_uri_mismatch` | Section 3 - copy the URI from Google's error page |
 | Certificate warning on a customer's subdomain | Section 2b - Cloudflare's free proxied cert stops at one level; go DNS-only |
 | A new workspace 404s | Wildcard DNS record missing, or the slug was reserved |
-| Uploads vanish after a restart | Still on local storage; set `STORAGE_TYPE=S_3` |
-| Background jobs never run | Worker container is not running |
+| Uploads missing | Still on local storage; set `STORAGE_TYPE=S_3` |
+| Background jobs never run | Worker not running - `/var/log/quantinity-api.log`; Redis not `noeviction` |
+| API down after a restart | `tail /var/log/quantinity-api.log` - it may still be building (5-10 min on a new version) |
+| API calls return a web page | A new engine route missing from `deploy/proxy/Caddyfile` |
+| Blank page but API healthy | Vercel down, `WEB_UPSTREAM` wrong, or Deployment Protection on |
 | Quotation numbers jumped | Normal for a withdrawn quotation; the number stays spent |
 | Everything is slow | Postgres before anything else |
 
@@ -321,8 +340,8 @@ lifecycle. `HARDENING.md` is an honest list of what is not production-grade yet
 
 ## 8. Security, briefly
 
-- Nothing but the reverse proxy on a public port. Postgres and Redis stay on the
-  private network.
+- Nothing but the reverse proxy on a public port. Port 3000 closed on the API
+  VM; Redis listens on localhost only; Postgres accepts only the API VM's IP.
 - Separate `ENCRYPTION_KEY` per environment. Never the staging one in production.
 - Customer data lives in Malaysia or Singapore unless a customer agrees
   otherwise in writing.
