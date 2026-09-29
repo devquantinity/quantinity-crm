@@ -173,6 +173,9 @@ const DestinationCard = ({
         borderRadius: '8px',
         background: COLORS.surface,
         textDecoration: 'none',
+        // Without this the card is an <a>, so every 'inherit' inside it
+        // inherits the browser's link blue rather than the page's text colour.
+        color: 'inherit',
         transition: 'border-color 0.15s',
       }}
     >
