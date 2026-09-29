@@ -37,17 +37,27 @@ type Settings = {
   };
 };
 
+/**
+ * Theme-agnostic on purpose.
+ *
+ * A front component renders inside whichever theme the workspace member chose,
+ * and there is no prop telling us which. So body text inherits its colour from
+ * the host instead of naming one, and every surface, border and dimmed label is
+ * a translucent grey that darkens a light background and lightens a dark one.
+ * Naming '#15181c' here is how this page came out with an invisible heading on
+ * a dark workspace.
+ */
 const COLORS = {
-  ink: '#15181c',
-  muted: '#6b747f',
-  line: '#e0e4e8',
-  accent: '#0c6e66',
-  warn: '#8a5300',
-  warnGround: '#fff6e5',
-  warnLine: '#f0d9a8',
-  surface: '#ffffff',
-  ground: '#f6f7f8',
+  line: 'rgba(127, 135, 145, 0.28)',
+  lineStrong: 'rgba(127, 135, 145, 0.5)',
+  surface: 'rgba(127, 135, 145, 0.06)',
+  accent: '#1f9d91',
+  warnGround: 'rgba(214, 158, 46, 0.14)',
+  warnLine: 'rgba(214, 158, 46, 0.45)',
 };
+
+/** Dimmed text, both themes: same hue as the host, less of it. */
+const muted: React.CSSProperties = { color: 'inherit', opacity: 0.62 };
 
 const DESTINATIONS = [
   {
@@ -125,12 +135,11 @@ const Chip = ({ label, value }: { label: string; value: string }) => (
       minWidth: '150px',
     }}
   >
-    <span style={{ fontSize: '11.5px', color: COLORS.muted }}>{label}</span>
+    <span style={{ fontSize: '11.5px', ...muted }}>{label}</span>
     <span
       style={{
         fontSize: '15px',
         fontWeight: 600,
-        color: COLORS.ink,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
       }}
     >
@@ -171,12 +180,12 @@ const DestinationCard = ({
         style={{
           fontSize: '13.5px',
           fontWeight: 600,
-          color: hovered ? COLORS.accent : COLORS.ink,
+          color: hovered ? COLORS.accent : 'inherit',
         }}
       >
         {label}
       </span>
-      <span style={{ fontSize: '11.5px', color: COLORS.muted, lineHeight: 1.45 }}>
+      <span style={{ fontSize: '11.5px', lineHeight: 1.45, ...muted }}>
         {hint}
       </span>
     </a>
@@ -208,14 +217,13 @@ const MainPage = () => {
         maxWidth: '860px',
         fontFamily:
           'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        color: COLORS.ink,
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <span style={{ fontSize: '19px', fontWeight: 600 }}>
           {APP_DISPLAY_NAME}
         </span>
-        <span style={{ fontSize: '13px', color: COLORS.muted, lineHeight: 1.5 }}>
+        <span style={{ fontSize: '13px', lineHeight: 1.5, ...muted }}>
           Quotations, invoices and delivery, in one place. Nothing here is sent
           to a client until you issue it.
         </span>
@@ -229,7 +237,6 @@ const MainPage = () => {
             borderRadius: '8px',
             background: COLORS.warnGround,
             fontSize: '12.5px',
-            color: COLORS.warn,
             lineHeight: 1.5,
           }}
         >
@@ -246,9 +253,9 @@ const MainPage = () => {
             padding: '12px 14px',
             border: `1px solid ${COLORS.line}`,
             borderRadius: '8px',
-            background: COLORS.ground,
+            background: COLORS.surface,
             fontSize: '12.5px',
-            color: COLORS.muted,
+            ...muted,
           }}
         >
           Could not read the billing settings: {loadError}
@@ -273,7 +280,7 @@ const MainPage = () => {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: COLORS.muted }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', ...muted }}>
           GO TO
         </span>
         <div
@@ -290,7 +297,7 @@ const MainPage = () => {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: COLORS.muted }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', ...muted }}>
           HOW A JOB RUNS
         </span>
         <ol
@@ -301,7 +308,6 @@ const MainPage = () => {
             flexDirection: 'column',
             gap: '5px',
             fontSize: '12.5px',
-            color: COLORS.ink,
             lineHeight: 1.5,
           }}
         >
@@ -309,7 +315,7 @@ const MainPage = () => {
             <li key={step}>{step}</li>
           ))}
         </ol>
-        <span style={{ fontSize: '11.5px', color: COLORS.muted, lineHeight: 1.5 }}>
+        <span style={{ fontSize: '11.5px', lineHeight: 1.5, ...muted }}>
           Every action lives on the grey bar at the top of a record. Less common
           ones - withdraw, revise, mark paid - are under the three dots at its
           right end.
