@@ -191,6 +191,32 @@ describe('marking an invoice paid', () => {
     expect(refusal?.error).toContain('2026-09-17');
   });
 
+  // What the database actually stores is a full ISO instant, not the tidy date
+  // the test above passes. That difference is how a raw
+  // "2026-09-29T04:39:34.794Z" reached a message a user reads.
+  it('prints the stored instant as a date, not a machine timestamp', () => {
+    const refusal = markPaidRefusal({
+      invoice: {
+        status: 'PAID',
+        documentNumber: 'INV-0004',
+        paidAt: '2026-09-29T04:39:34.794Z',
+      },
+    });
+
+    expect(refusal?.error).toContain('2026-09-29');
+    expect(refusal?.error).not.toContain('T04:39');
+    expect(refusal?.error).not.toContain('.794Z');
+  });
+
+  it('says nothing about a date it does not have', () => {
+    const refusal = markPaidRefusal({
+      invoice: { status: 'PAID', documentNumber: 'INV-0004', paidAt: null },
+    });
+
+    expect(refusal?.error).toContain('INV-0004');
+    expect(refusal?.error).not.toContain('on ');
+  });
+
   it('will not pay an invoice nobody has been sent', () => {
     const refusal = markPaidRefusal({ invoice: { status: 'DRAFT' } });
 

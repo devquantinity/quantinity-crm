@@ -1,283 +1,319 @@
 import { defineFrontComponent } from 'twenty-sdk/define';
-import { useState } from 'react';
-import { Avatar } from 'twenty-ui/data-display';
-import {
-  IconBox,
-  IconHierarchy,
-  IconLayout,
-  IconSettingsAutomation,
-} from 'twenty-ui/icon';
+import { useEffect, useState } from 'react';
+import { RestApiClient } from 'twenty-client-sdk/rest';
 
 import {
   APP_DISPLAY_NAME,
   MAIN_PAGE_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
-const DOCS_BASE_URL = 'https://docs.twenty.com/developers/extend/apps';
+/**
+ * The app's front door.
+ *
+ * Quotes, invoices, projects and milestones have no sidebar entry - Twenty only
+ * lists objects it was told to list, and adding six more would bury Companies
+ * and People. So the links live here, which is also the only page that can say
+ * anything useful about the state of the workspace.
+ *
+ * The banner is the point of the page. Issuer details are frozen onto every
+ * document at the moment it is issued, so a blank or placeholder address is not
+ * a cosmetic problem to fix later - it is permanent on everything sent before
+ * someone notices.
+ */
 
-const CATEGORIES = [
+type Settings = {
+  nextDocumentNumberPreview?: string;
+  invoicePrefix: string;
+  invoicePadding: number;
+  nextInvoiceSequence: number;
+  paymentInstructions: string;
+  publicBaseUrl: string;
+  issuer: {
+    name: string;
+    registrationNo: string;
+    address: string;
+    email: string;
+    phone: string;
+  };
+};
+
+const COLORS = {
+  ink: '#15181c',
+  muted: '#6b747f',
+  line: '#e0e4e8',
+  accent: '#0c6e66',
+  warn: '#8a5300',
+  warnGround: '#fff6e5',
+  warnLine: '#f0d9a8',
+  surface: '#ffffff',
+  ground: '#f6f7f8',
+};
+
+const DESTINATIONS = [
   {
-    title: 'Data model',
-    color: '#73D08D',
-    items: [
-      { label: 'CUSTOM OBJECT', href: `${DOCS_BASE_URL}/data/objects` },
-      {
-        label: 'CUSTOM FIELDS',
-        href: `${DOCS_BASE_URL}/data/extending-objects`,
-      },
-    ],
-    rotation: '2.4deg',
+    label: 'Quotations',
+    href: '/objects/quotes',
+    hint: 'Everything drafted, issued, accepted or withdrawn',
   },
   {
-    title: 'Logic',
-    color: '#F4D345',
-    items: [
-      {
-        label: 'TOOLS',
-        href: `${DOCS_BASE_URL}/logic/logic-functions`,
-      },
-      {
-        label: 'LOGIC FUNCTION',
-        href: `${DOCS_BASE_URL}/logic/logic-functions`,
-      },
-      {
-        label: 'SKILLS',
-        href: `${DOCS_BASE_URL}/logic/skills-and-agents`,
-      },
-    ],
-    rotation: '0deg',
+    label: 'Invoices',
+    href: '/objects/invoices',
+    hint: 'Drafts waiting to be issued, and what is still unpaid',
   },
   {
-    title: 'Layout',
-    color: '#C4A2E0',
-    items: [
-      { label: 'VIEWS', href: `${DOCS_BASE_URL}/layout/views` },
-      { label: 'WIDGETS', href: `${DOCS_BASE_URL}/layout/page-layouts` },
-      {
-        label: 'LAYOUT PAGES',
-        href: `${DOCS_BASE_URL}/layout/page-layouts`,
-      },
-      {
-        label: 'COMMANDS',
-        href: `${DOCS_BASE_URL}/layout/command-menu-items`,
-      },
-    ],
-    rotation: '-2.8deg',
+    label: 'Projects',
+    href: '/objects/projects',
+    hint: 'Delivery for the deals that were won',
+  },
+  {
+    label: 'Milestones',
+    href: '/objects/milestones',
+    hint: 'The billable pieces of each project',
+  },
+  {
+    label: 'Catalogue',
+    href: '/objects/products',
+    hint: 'What the quotation picker offers, and at what price',
+  },
+  {
+    label: 'Deals',
+    href: '/objects/opportunities',
+    hint: 'A quotation hangs off a deal - that is where the client comes from',
   },
 ] as const;
 
-const ArrowUpRight = ({ color = '#999' }: { color?: string }) => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-    <path
-      d="M4.5 3.5H10.5V9.5M10.5 3.5L3.5 10.5"
-      stroke={color}
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
+const FLOW = [
+  'Open a deal, make a quotation against it',
+  'Add items from the catalogue, then Issue',
+  'Send the client link - they accept it themselves',
+  'Start project: the accepted lines become milestones',
+  'Bill a milestone, Issue the invoice, send its link',
+  'Mark invoice paid when the money lands',
+] as const;
+
+/** Blank, or still carrying the words we seed test workspaces with. */
+const looksUnset = (settings: Settings | null) => {
+  if (!settings) return false;
+
+  const issuer = settings.issuer ?? ({} as Settings['issuer']);
+  const missing =
+    !String(issuer.name ?? '').trim() || !String(issuer.address ?? '').trim();
+  const placeholder = /test data/i.test(
+    `${issuer.name ?? ''} ${issuer.address ?? ''} ${
+      settings.paymentInstructions ?? ''
+    }`,
+  );
+
+  return missing || placeholder;
+};
+
+const nextInvoiceNumber = (settings: Settings) =>
+  `${settings.invoicePrefix ?? 'INV-'}${String(
+    settings.nextInvoiceSequence ?? 1,
+  ).padStart(Number(settings.invoicePadding ?? 4), '0')}`;
+
+const Chip = ({ label, value }: { label: string; value: string }) => (
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '2px',
+      padding: '10px 14px',
+      border: `1px solid ${COLORS.line}`,
+      borderRadius: '8px',
+      background: COLORS.surface,
+      minWidth: '150px',
+    }}
+  >
+    <span style={{ fontSize: '11.5px', color: COLORS.muted }}>{label}</span>
+    <span
+      style={{
+        fontSize: '15px',
+        fontWeight: 600,
+        color: COLORS.ink,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      }}
+    >
+      {value}
+    </span>
+  </div>
 );
 
-const CategoryCard = ({
-  title,
-  color,
-  items,
-  rotation,
+const DestinationCard = ({
+  label,
+  href,
+  hint,
 }: {
-  title: string;
-  color: string;
-  items: ReadonlyArray<{ label: string; href: string }>;
-  rotation: string;
+  label: string;
+  href: string;
+  hint: string;
 }) => {
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-
-  const CategoryIcon = () => {
-    if (title === 'Data model') {
-      return <IconHierarchy color={color} size={'20px'} />;
-    }
-    if (title === 'Logic') {
-      return <IconSettingsAutomation color={color} size={'20px'} />;
-    }
-    if (title === 'Layout') {
-      return <IconLayout color={color} size={'20px'} />;
-    }
-  };
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <div
+    <a
+      href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex',
         flexDirection: 'column',
-        border: `1px solid ${color}80`,
-        borderRadius: '12px',
-        overflow: 'hidden',
-        width: '240px',
-        background: '#FFFFFF',
-        transform: `rotate(${rotation})`,
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+        gap: '3px',
+        padding: '12px 14px',
+        border: `1px solid ${hovered ? COLORS.accent : COLORS.line}`,
+        borderRadius: '8px',
+        background: COLORS.surface,
+        textDecoration: 'none',
+        transition: 'border-color 0.15s',
       }}
     >
-      <div
+      <span
         style={{
-          padding: '16px 20px',
-          background: `${color}22`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
+          fontSize: '13.5px',
+          fontWeight: 600,
+          color: hovered ? COLORS.accent : COLORS.ink,
         }}
       >
-        <CategoryIcon />
-        <span
-          style={{
-            fontSize: '16px',
-            fontWeight: 600,
-            color: color,
-          }}
-        >
-          {title}
-        </span>
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '8px',
-          gap: '4px',
-        }}
-      >
-        {items.map((item) => {
-          const isHovered = hoveredItem === item.label;
-
-          return (
-            <a
-              key={item.label}
-              href={item.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              onMouseEnter={() => setHoveredItem(item.label)}
-              onMouseLeave={() => setHoveredItem(null)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                textDecoration: 'none',
-                cursor: 'pointer',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                background: isHovered ? '#0000000A' : 'transparent',
-                transition: 'background 0.15s',
-              }}
-            >
-              <IconBox color={color} size={'20px'} />
-              <span
-                style={{
-                  fontSize: '13px',
-                  fontWeight: 300,
-                  color: '#333',
-                  letterSpacing: '0.5px',
-                  flex: 1,
-                }}
-              >
-                {item.label}
-              </span>
-              {isHovered && <ArrowUpRight />}
-            </a>
-          );
-        })}
-      </div>
-    </div>
+        {label}
+      </span>
+      <span style={{ fontSize: '11.5px', color: COLORS.muted, lineHeight: 1.45 }}>
+        {hint}
+      </span>
+    </a>
   );
 };
 
 const MainPage = () => {
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    new RestApiClient()
+      .get<Settings>('/s/quote-settings')
+      .then(setSettings)
+      .catch((error) =>
+        setLoadError(
+          error instanceof Error ? error.message : 'Could not load settings',
+        ),
+      );
+  }, []);
+
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
+        gap: '20px',
+        padding: '28px 32px 40px',
+        maxWidth: '860px',
         fontFamily:
           'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        gap: '8px',
-        padding: '40px',
+        color: COLORS.ink,
       }}
     >
-      <Avatar
-        placeholder={APP_DISPLAY_NAME}
-        placeholderColorSeed={APP_DISPLAY_NAME}
-        size="xl"
-      />
-      <span
-        style={{
-          fontSize: '24px',
-          fontWeight: 600,
-          color: '#333',
-          marginTop: '8px',
-        }}
-      >
-        {APP_DISPLAY_NAME}
-      </span>
-      <span
-        style={{
-          fontSize: '13px',
-          color: '#888',
-          textAlign: 'center',
-          lineHeight: '1.5',
-        }}
-      >
-        Was installed successfully.
-        <br />
-        You can now add content to your app.
-      </span>
-      <a
-        href="/settings/applications#installed"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-          marginTop: '16px',
-          fontSize: '13px',
-          color: '#333',
-          textDecoration: 'none',
-          padding: '8px 16px',
-          borderRadius: '8px',
-          border: '1px solid #e0e0e0',
-          background: '#fafafa',
-          transition: 'background 0.15s, border-color 0.15s',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#f0f0f0';
-          e.currentTarget.style.borderColor = '#ccc';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = '#fafafa';
-          e.currentTarget.style.borderColor = '#e0e0e0';
-        }}
-      >
-        Open app settings
-        <ArrowUpRight color="#333" />
-      </a>
-      <div
-        style={{
-          display: 'flex',
-          gap: '16px',
-          marginTop: '32px',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          alignItems: 'flex-start',
-        }}
-      >
-        {CATEGORIES.map((category) => (
-          <CategoryCard
-            key={category.title}
-            title={category.title}
-            color={category.color}
-            items={category.items}
-            rotation={category.rotation}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={{ fontSize: '19px', fontWeight: 600 }}>
+          {APP_DISPLAY_NAME}
+        </span>
+        <span style={{ fontSize: '13px', color: COLORS.muted, lineHeight: 1.5 }}>
+          Quotations, invoices and delivery, in one place. Nothing here is sent
+          to a client until you issue it.
+        </span>
+      </div>
+
+      {looksUnset(settings) && (
+        <div
+          style={{
+            padding: '12px 14px',
+            border: `1px solid ${COLORS.warnLine}`,
+            borderRadius: '8px',
+            background: COLORS.warnGround,
+            fontSize: '12.5px',
+            color: COLORS.warn,
+            lineHeight: 1.5,
+          }}
+        >
+          <strong>Your business details are not set yet.</strong> They are copied
+          onto every quotation and invoice the moment it is issued, and stay
+          there. Fill them in on the <strong>Billing</strong> tab before sending
+          anything to a real client.
+        </div>
+      )}
+
+      {loadError && (
+        <div
+          style={{
+            padding: '12px 14px',
+            border: `1px solid ${COLORS.line}`,
+            borderRadius: '8px',
+            background: COLORS.ground,
+            fontSize: '12.5px',
+            color: COLORS.muted,
+          }}
+        >
+          Could not read the billing settings: {loadError}
+        </div>
+      )}
+
+      {settings && (
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <Chip
+            label="Next quotation"
+            value={settings.nextDocumentNumberPreview ?? '-'}
           />
-        ))}
+          <Chip label="Next invoice" value={nextInvoiceNumber(settings)} />
+          <Chip
+            label="Client links open at"
+            value={
+              String(settings.publicBaseUrl ?? '').replace(/^https?:\/\//, '') ||
+              'not set'
+            }
+          />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: COLORS.muted }}>
+          GO TO
+        </span>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+            gap: '10px',
+          }}
+        >
+          {DESTINATIONS.map((destination) => (
+            <DestinationCard key={destination.href} {...destination} />
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: COLORS.muted }}>
+          HOW A JOB RUNS
+        </span>
+        <ol
+          style={{
+            margin: 0,
+            paddingLeft: '18px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px',
+            fontSize: '12.5px',
+            color: COLORS.ink,
+            lineHeight: 1.5,
+          }}
+        >
+          {FLOW.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+        <span style={{ fontSize: '11.5px', color: COLORS.muted, lineHeight: 1.5 }}>
+          Every action lives on the grey bar at the top of a record. Less common
+          ones - withdraw, revise, mark paid - are under the three dots at its
+          right end.
+        </span>
       </div>
     </div>
   );
@@ -286,6 +322,6 @@ const MainPage = () => {
 export default defineFrontComponent({
   universalIdentifier: MAIN_PAGE_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER,
   name: APP_DISPLAY_NAME,
-  description: `${APP_DISPLAY_NAME} front component displaying the app logo and name`,
+  description: `${APP_DISPLAY_NAME} overview: where to go, what is unset, and how a job runs`,
   component: MainPage,
 });

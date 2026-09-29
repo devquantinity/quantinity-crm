@@ -113,6 +113,26 @@ export const issueInvoiceRefusal = ({
 
 // --- marking an invoice paid ----------------------------------------------
 
+/**
+ * A timestamp as it should appear in a sentence someone reads.
+ *
+ * The stored value is an ISO instant in UTC. Everything the client sees is
+ * printed the same way - date only, YYYY-MM-DD - so a refusal message that
+ * echoed the raw instant would be the one place in the app showing machine
+ * format. Date only is also the honest precision here: nobody reconciles a
+ * payment to the second.
+ *
+ * Known limitation, shared with the documents themselves: this is the UTC date,
+ * so between midnight and 08:00 in Malaysia it reads as the day before. Fixing
+ * it properly means a timezone setting per workspace, not a hardcoded offset.
+ */
+export const documentDate = (value: unknown) => {
+  const text = String(value ?? '').trim();
+
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : '';
+};
+
+
 export const markPaidRefusal = ({
   invoice,
 }: {
@@ -125,9 +145,9 @@ export const markPaidRefusal = ({
 
   if (invoice.status === 'PAID') {
     return {
-      error: `${invoice.documentNumber} is already marked paid${
-        invoice.paidAt ? ` (${invoice.paidAt})` : ''
-      }`,
+      error: `${invoice.documentNumber} was already marked paid${
+        documentDate(invoice.paidAt) ? ` on ${documentDate(invoice.paidAt)}` : ''
+      }.`,
       status: 409,
     };
   }
