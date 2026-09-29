@@ -19,8 +19,9 @@ everywhere below - the rest of each address stays the same.
 
 1. Open Chrome and go to **https://internal.crm.quantinity.com**
 2. Sign in.
-2b. **Create two products first**, or step A4 will have nothing to tick:
-   **Products** in the sidebar -> **New**, give each a name and a price.
+2b. Check the catalogue has products: **Products** in the sidebar. There should
+   be at least two with a unit price. If it is empty, add two: **New**, then give
+   each a name, a description, a unit and a price. Step A4 needs them.
 3. Check these pages all load. There are no sidebar links for them yet, so type
    the address in:
 
@@ -45,12 +46,12 @@ sidebar, open the **Billing** tab, and write down "Next quotation will be…" an
 
 | # | Do this | Should happen |
 |---|---|---|
-| A1 | Go to https://internal.crm.quantinity.com/objects/opportunities and open any deal that has a company on it | The deal's page opens |
-| A2 | Scroll down to the **Quotes** section and click **+** | A new empty quotation is created and opens |
-| A3 | Click **Add items from catalogue** on the action bar | A panel opens listing products. If it is empty, create two products first: **Products** in the sidebar → New |
+| A1 | Go to https://internal.crm.quantinity.com/objects/quotes and click **Add a Quote** (or **New** at the top right) | A new empty quotation is created and opens |
+| A2 | In the fields list on the left, click the **Opportunity** field and pick a deal that has a company on it | The deal's name appears in the field. Without this the quotation has nobody to bill |
+| A3 | Click **Add items** on the action bar | A panel opens listing products, grouped by category. If it is empty, create two products first: **Products** in the sidebar → New |
 | A4 | Tick two products, set a quantity on each, click **Add** | Two lines appear on the quotation with the right quantities |
-| A5 | Click **Add items from catalogue** again | The panel opens with **nothing ticked** |
-| A6 | Close the panel without adding | No extra lines were added |
+| A5 | Click **Add items** again | The panel opens with **nothing ticked** |
+| A6 | Close the panel with the **×** at its top right | No extra lines were added |
 
 **Report a problem if:** the ticks are still on at A5, or adding puts the same
 line on twice.
@@ -61,12 +62,12 @@ line on twice.
 
 | # | Do this | Should happen |
 |---|---|---|
-| B1 | On that quotation, click **Issue quotation** | A confirmation panel opens |
-| B2 | Confirm | Status becomes ISSUED, a number appears (Q-00xx), and a message says the client link was copied |
-| B3 | Open a new browser tab and paste | A clean client-facing quotation page opens |
+| B1 | On that quotation, click **Issue** | A confirmation panel opens asking "Issue this quotation?" |
+| B2 | Click **Issue** in the panel | Status becomes ISSUED, a number appears (Q-00xx), the record is renamed to that number, and a valid-until date is filled in |
+| B3 | Copy the **Share token** from the fields list, open a new tab and go to `https://internal.crm.quantinity.com/s/quote?token=` followed by it | A clean client-facing quotation page opens |
 | B4 | Read the page | "Bill to" is filled in with the client's name and address — **not empty** |
 | B5 | Go back and try to change a line on the issued quotation | It should refuse or be read-only |
-| B6 | Click **Issue quotation** again | Refused, with a message saying it is already issued |
+| B6 | Click **Issue** again | Refused, with a message saying it is already issued |
 
 **Report a problem if:** "Bill to" is empty, the link shows an error or raw
 code like `{"statusCode":500…}`, or issuing twice gives it a second number.
@@ -80,7 +81,7 @@ blank screen, or raw code.
 
 | # | Do this | Should happen |
 |---|---|---|
-| C1 | Make a new quotation with no lines at all, click **Issue quotation** | Refused: nothing to issue |
+| C1 | Make a new quotation with no lines at all, click **Issue** | Refused: nothing to issue |
 | C2 | Make a new quotation, add a line but leave its description and name empty, issue it | Refused: the line has no description |
 | C3 | Make a new quotation **not linked to any deal**, issue it | Refused: nobody to bill |
 | C4 | After C3, open **Quantinity CRM → Billing** and read "Next quotation will be…" | **The number has not moved.** A refused quotation must not use up a number |
@@ -107,9 +108,9 @@ blank screen, or raw code.
 
 | # | Do this | Should happen |
 |---|---|---|
-| E1 | On that deal, click **Start project** | A project is created |
+| E1 | Open the deal the quotation belongs to and click **Project** on the action bar, then **Start project** | A project is created and opens |
 | E2 | Open the project | It has one milestone per line of the accepted quotation, same order, same amounts |
-| E3 | Go back to the deal and click **Start project** again | Refused — one project per deal |
+| E3 | Go back to the deal and click **Project** again | Refused — one project per deal |
 
 ---
 
@@ -117,10 +118,10 @@ blank screen, or raw code.
 
 | # | Do this | Should happen |
 |---|---|---|
-| F1 | Open a milestone on that project, click **Bill this milestone** | A draft invoice is created for that milestone's amount |
-| F2 | Click **Bill this milestone** again | Refused — there is already a draft |
-| F3 | Open the **draft invoice** it created (not the milestone), click **Issue invoice** | It gets a number (INV-00xx), a due date, and the client link is copied |
-| F4 | Paste the link in a new tab | A clean invoice page with "Bill to", the amount due, and how to pay |
+| F1 | Open a milestone on that project, click **Bill** on the action bar, then **Draft invoice** | A draft invoice is created for that milestone's amount and opens |
+| F2 | Go back to the milestone and click **Bill** again | Refused — there is already a draft |
+| F3 | On the draft invoice, click **Issue** | It gets a number (INV-00xx) and a due date |
+| F4 | Open `https://internal.crm.quantinity.com/s/invoice?token=` followed by its **Share token** | A clean invoice page with "Bill to", the amount due, and how to pay |
 | F5 | Back in the app, click **…** then **Mark invoice paid** | Status becomes PAID |
 | F6 | Click **…** then **Mark invoice paid** again | Refused, and it tells you the date it was already paid |
 | F7 | Reload the client link from F4 | It no longer asks for money |
