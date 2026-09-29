@@ -57,3 +57,11 @@ cli-help.txt
 
 # production build (deploy/api/build.sh)
 /.build/
+
+# credentials people paste into the repo while debugging. api.txt once held two
+# live workspace API keys and reached GitHub before anyone noticed.
+api.txt
+*.key
+*.token
+*api-key*
+*apikey*

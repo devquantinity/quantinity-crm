@@ -13,23 +13,31 @@ Work through the sections in order. Section D depends on what you made in A.
 
 ## Before you start
 
-1. Open Chrome and go to **http://localhost:2020**
+**The address for this round of testing is `https://internal.crm.quantinity.com`.**
+If you are told to test a different workspace, swap the first part of the address
+everywhere below - the rest of each address stays the same.
+
+1. Open Chrome and go to **https://internal.crm.quantinity.com**
 2. Sign in.
+2b. **Create two products first**, or step A4 will have nothing to tick:
+   **Products** in the sidebar -> **New**, give each a name and a price.
 3. Check these pages all load. There are no sidebar links for them yet, so type
    the address in:
 
-   - http://localhost:2020/objects/quotes
-   - http://localhost:2020/objects/invoices
-   - http://localhost:2020/objects/projects
-   - http://localhost:2020/objects/milestones
-   - http://localhost:2020/objects/products
+   - https://internal.crm.quantinity.com/objects/quotes
+   - https://internal.crm.quantinity.com/objects/invoices
+   - https://internal.crm.quantinity.com/objects/projects
+   - https://internal.crm.quantinity.com/objects/milestones
+   - https://internal.crm.quantinity.com/objects/products
 
 **Report a problem if:** any page shows an error, or spins for more than about
 ten seconds.
 
-Note the two numbers you start from: open **Settings → Billing** and write down
-"Next quotation will be…" and "Next invoice will be…". You will check these
-later.
+Note the two numbers you start from: click **Quantinity CRM** at the top of the
+sidebar, open the **Billing** tab, and write down "Next quotation will be…" and
+"Next invoice will be…". You will check these later.
+
+(Billing is a tab inside the app, not in Twenty's own Settings.)
 
 ---
 
@@ -37,9 +45,9 @@ later.
 
 | # | Do this | Should happen |
 |---|---|---|
-| A1 | Go to http://localhost:2020/objects/opportunities and open any deal that has a company on it | The deal's page opens |
+| A1 | Go to https://internal.crm.quantinity.com/objects/opportunities and open any deal that has a company on it | The deal's page opens |
 | A2 | Scroll down to the **Quotes** section and click **+** | A new empty quotation is created and opens |
-| A3 | Click **Add items from catalogue** on the action bar | A panel opens listing products |
+| A3 | Click **Add items from catalogue** on the action bar | A panel opens listing products. If it is empty, create two products first: **Products** in the sidebar → New |
 | A4 | Tick two products, set a quantity on each, click **Add** | Two lines appear on the quotation with the right quantities |
 | A5 | Click **Add items from catalogue** again | The panel opens with **nothing ticked** |
 | A6 | Close the panel without adding | No extra lines were added |
@@ -75,7 +83,7 @@ blank screen, or raw code.
 | C1 | Make a new quotation with no lines at all, click **Issue quotation** | Refused: nothing to issue |
 | C2 | Make a new quotation, add a line but leave its description and name empty, issue it | Refused: the line has no description |
 | C3 | Make a new quotation **not linked to any deal**, issue it | Refused: nobody to bill |
-| C4 | After C3, open **Settings → Billing** and read "Next quotation will be…" | **The number has not moved.** A refused quotation must not use up a number |
+| C4 | After C3, open **Quantinity CRM → Billing** and read "Next quotation will be…" | **The number has not moved.** A refused quotation must not use up a number |
 | C5 | Open an issued quotation, click **…** then **Withdraw quotation** | Status becomes WITHDRAWN |
 | C6 | Open the client link for that withdrawn quotation | It shows as withdrawn and cannot be accepted |
 
@@ -111,7 +119,7 @@ blank screen, or raw code.
 |---|---|---|
 | F1 | Open a milestone on that project, click **Bill this milestone** | A draft invoice is created for that milestone's amount |
 | F2 | Click **Bill this milestone** again | Refused — there is already a draft |
-| F3 | Open the draft invoice, click **Issue invoice** | It gets a number (INV-00xx), a due date, and the client link is copied |
+| F3 | Open the **draft invoice** it created (not the milestone), click **Issue invoice** | It gets a number (INV-00xx), a due date, and the client link is copied |
 | F4 | Paste the link in a new tab | A clean invoice page with "Bill to", the amount due, and how to pay |
 | F5 | Back in the app, click **…** then **Mark invoice paid** | Status becomes PAID |
 | F6 | Click **…** then **Mark invoice paid** again | Refused, and it tells you the date it was already paid |
@@ -124,7 +132,7 @@ blank screen, or raw code.
 
 | # | Do this | Should happen |
 |---|---|---|
-| G1 | **Settings → Billing**, set "Next quotation" to a **higher** number, save | Saves. Skipping ahead is allowed |
+| G1 | **Quantinity CRM → Billing**, set "Next quotation" to a **higher** number, save | Saves. Skipping ahead is allowed |
 | G2 | Set it to a **lower** number, save | Refused, and the message names the highest number already in use |
 
 ---

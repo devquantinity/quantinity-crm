@@ -329,8 +329,25 @@ Never upgrade on a Friday.
 | API down after a restart | `tail /var/log/quantinity-api.log` - it may still be building (5-10 min on a new version) |
 | API calls return a web page | A new engine route missing from `deploy/proxy/Caddyfile` |
 | Blank page but API healthy | Vercel down, `WEB_UPSTREAM` wrong, or Deployment Protection on |
+| Every `/s/` route returns 403 | `LOGIC_FUNCTION_TYPE` unset - see below. Not a permissions problem |
 | Quotation numbers jumped | Normal for a withdrawn quotation; the number stays spent |
 | Everything is slow | Postgres before anything else |
+
+### The 403 that is not about permissions
+
+Every logic function route answering `403 FORBIDDEN_EXCEPTION` with "Logic
+function execution failed for \<id\>" means `LOGIC_FUNCTION_TYPE` is unset and
+the engine is running its DisabledDriver. Set it to `LOCAL` in
+`/etc/quantinity/api.env` and restart. The variable was `SERVERLESS_TYPE`
+before 2.40.
+
+It is worth knowing the shape of this one because everything about it points
+the wrong way: a 403 says permissions, the app is freshly installed so
+permissions are the obvious suspect, and records and GraphQL keep working so
+the server looks fine. The engine does say what is wrong, in as many words -
+but only in `/var/log/quantinity-api.log`, because the unit sends both streams
+to that file and `journalctl -u quantinity-api` is therefore empty. Read the
+file, not the journal.
 
 `RUNBOOK.md` in this repo covers day-to-day operation and the document
 lifecycle. `HARDENING.md` is an honest list of what is not production-grade yet

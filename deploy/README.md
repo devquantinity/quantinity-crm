@@ -54,6 +54,18 @@ This is also how the engine's own cloud is split: an ingress routes the
 `ApiPath` prefixes to the server and the rest to the frontend. The list in
 `proxy/Caddyfile` is that enum. Re-check it on every engine upgrade.
 
+## Known issue in the live Caddyfile
+
+`/etc/caddy/Caddyfile` on the API VM currently has the slug redirect as:
+
+```
+redir @slug https://\{re.slug.1\}.crm.quantinity.com/ 302
+```
+
+The backslashes escape the placeholder, so Caddy does not substitute the
+captured slug and sends the browser to a literal `{re.slug.1}.crm.quantinity.com`.
+The version in this repo is correct; copy it over and reload Caddy.
+
 ## API VM, once
 
 Ubuntu 24.04, 2 vCPU / 8 GB. The build alone wants ~4 GB; the server and
